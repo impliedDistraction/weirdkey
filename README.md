@@ -17,3 +17,13 @@ Put the game in the controller. weirdkey is a tiny Java runtime for cartridge-st
 ```
 
 Bare arguments are treated as key presses; use `PRESS:KEY`, `HOLD:KEY`, or `RELEASE:KEY` to simulate other input events.
+
+## Run on a G915 X on Windows
+
+Install Logitech G HUB, connect the keyboard, and run:
+
+```powershell
+./gradlew :app:run --args="--hardware"
+```
+
+Weirdkey saves the current lighting, turns the keyboard dark, and lights one key green. Press the green key to advance; press Esc to quit and restore the saved lighting. Set `WEIRDKEY_LOGITECH_LED_DLL` only if G HUB's LED SDK DLL is installed outside its standard location.

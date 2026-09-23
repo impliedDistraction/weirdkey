@@ -9,12 +9,18 @@ import weirdkey.runtime.InMemoryKeyboard;
 import weirdkey.runtime.InputType;
 import weirdkey.runtime.KeyInputEvent;
 import weirdkey.runtime.LogitechG915XTopology;
+import weirdkey.runtime.WindowsLogitechKeyboard;
 
 public final class App {
     private App() {
     }
 
     public static void main(String[] args) {
+        if (args.length == 1 && "--hardware".equals(args[0])) {
+            runHardware();
+            return;
+        }
+
         InMemoryKeyboard keyboard = new InMemoryKeyboard(LogitechG915XTopology.create());
         DisplaySurface display = message -> System.out.println("[display] " + message);
         CartridgeRuntime runtime = new CartridgeRuntime(
@@ -37,6 +43,21 @@ public final class App {
             keyboard.emit(event);
             System.out.println("Input: " + event.type() + " " + event.keyId());
             printLitKeys(keyboard.litKeys());
+        }
+    }
+
+    private static void runHardware() {
+        try (WindowsLogitechKeyboard keyboard = new WindowsLogitechKeyboard()) {
+            DisplaySurface display = message -> System.out.println("[display] " + message);
+            CartridgeRuntime runtime = new CartridgeRuntime(
+                keyboard,
+                Optional.of(display),
+                new FirstExperimentCartridge()
+            );
+
+            runtime.start();
+            System.out.println("Weirdkey is running on the G915 X. Press Esc to quit.");
+            keyboard.runUntilEscape();
         }
     }
 
