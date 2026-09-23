@@ -1,0 +1,29 @@
+package weirdkey.runtime;
+
+import java.util.Optional;
+
+public final class GameContext {
+    private final KeyboardDevice keyboard;
+    private final Optional<DisplaySurface> displaySurface;
+
+    public GameContext(KeyboardDevice keyboard, Optional<DisplaySurface> displaySurface) {
+        this.keyboard = keyboard;
+        this.displaySurface = displaySurface;
+    }
+
+    public KeyboardTopology topology() {
+        return keyboard.topology();
+    }
+
+    public void lightKey(String keyId, KeyColor color) {
+        keyboard.setColor(keyId, color);
+    }
+
+    public void clearKey(String keyId) {
+        keyboard.clearColor(keyId);
+    }
+
+    public void showStatus(String message) {
+        displaySurface.ifPresent(surface -> surface.showStatus(message));
+    }
+}
