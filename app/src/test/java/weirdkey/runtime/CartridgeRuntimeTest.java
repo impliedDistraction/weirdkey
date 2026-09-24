@@ -1,11 +1,12 @@
 package weirdkey.runtime;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
+
 import weirdkey.runtime.events.EventEnvelope;
 import weirdkey.runtime.events.EventTags;
 

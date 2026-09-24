@@ -1,6 +1,7 @@
 package weirdkey.runtime;
 
 import java.util.Optional;
+
 import weirdkey.runtime.events.EventBus;
 import weirdkey.runtime.events.EventTags;
 

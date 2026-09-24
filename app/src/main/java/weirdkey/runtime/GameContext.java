@@ -3,6 +3,7 @@ package weirdkey.runtime;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
+
 import weirdkey.runtime.events.EventBus;
 
 public final class GameContext {
