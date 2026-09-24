@@ -35,6 +35,7 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
     private final Set<String> pressedKeys = new HashSet<>();
     private final LowLevelKeyboardProc keyboardProc = this::handleKeyboardEvent;
     private Set<String> capturedKeys = Set.of();
+    private RuntimeException listenerFailure;
     private HHOOK hook;
     private boolean closed;
 
@@ -104,6 +105,7 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
             throw new IllegalStateException("Keyboard input loop is already running");
         }
 
+        listenerFailure = null;
         hook = User32.INSTANCE.SetWindowsHookEx(WinUser.WH_KEYBOARD_LL, keyboardProc, null, 0);
         if (hook == null) {
             throw new IllegalStateException("Unable to install the Windows keyboard hook");
@@ -115,6 +117,11 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
             while ((result = User32.INSTANCE.GetMessage(message, null, 0, 0)) > 0) {
                 User32.INSTANCE.TranslateMessage(message);
                 User32.INSTANCE.DispatchMessage(message);
+            }
+            if (listenerFailure != null) {
+                RuntimeException failure = listenerFailure;
+                listenerFailure = null;
+                throw failure;
             }
             if (result < 0) {
                 throw new IllegalStateException("Windows keyboard message loop failed");
@@ -143,11 +150,19 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
             boolean keyUp = messageId == WinUser.WM_KEYUP || messageId == WinUser.WM_SYSKEYUP;
             if (keyDown || keyUp) {
                 String keyId = keyId(event);
+                boolean suppress = shouldSuppress(messageId, keyId, capturedKeys);
                 if ("ESC".equals(keyId) && keyDown) {
                     User32.INSTANCE.PostQuitMessage(0);
                 } else if (keyId != null) {
-                    emit(keyId, keyDown);
-                    if (shouldSuppress(messageId, keyId, capturedKeys)) {
+                    try {
+                        emit(keyId, keyDown);
+                    } catch (RuntimeException exception) {
+                        if (listenerFailure == null) {
+                            listenerFailure = exception;
+                        }
+                        User32.INSTANCE.PostQuitMessage(1);
+                    }
+                    if (suppress) {
                         return new LRESULT(1);
                     }
                 }
