@@ -27,3 +27,22 @@ Install Logitech G HUB, connect the keyboard, and run:
 ```
 
 Weirdkey saves the current lighting, turns the keyboard dark, and lights one key green. Captured gameplay keys stay inside Weirdkey instead of reaching the foreground Windows app, while Esc remains available to quit and restore the saved lighting. Set `WEIRDKEY_LOGITECH_LED_DLL` only if G HUB's LED SDK DLL is installed outside its standard location.
+
+## Runtime events
+
+Cartridges can use `GameContext.events()` to publish and subscribe without adding device-specific callbacks. Events carry their emitter and tags, subscriptions can expire after a fixed number of deliveries, and completed emissions can chain immediate or delayed follow-ups:
+
+```java
+EventTag gameplay = new EventTag("gameplay");
+
+context.events().subscribeTimes(KeyInputEvent.class, 3, envelope -> {
+	KeyboardDevice keyboard = envelope.emitterAs(KeyboardDevice.class).orElseThrow();
+	System.out.println(keyboard.topology());
+});
+
+context.events()
+	.emit(new InvalidAction("Expected F4"), this, gameplay)
+	.thenEmitAfter(Duration.ofMillis(150), new FeedbackFinished());
+```
+
+Dispatch is ordered and fail-fast. Delayed events are serialized with immediate events, and closing the cartridge runtime cancels pending delayed emissions.

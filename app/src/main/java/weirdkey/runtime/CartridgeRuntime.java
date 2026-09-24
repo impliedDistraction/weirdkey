@@ -1,17 +1,21 @@
 package weirdkey.runtime;
 
 import java.util.Optional;
+import weirdkey.runtime.events.EventBus;
+import weirdkey.runtime.events.EventTags;
 
-public final class CartridgeRuntime {
+public final class CartridgeRuntime implements AutoCloseable {
     private final KeyboardDevice keyboard;
     private final Cartridge cartridge;
+    private final EventBus events;
     private final GameContext context;
     private boolean started;
 
     public CartridgeRuntime(KeyboardDevice keyboard, Optional<DisplaySurface> displaySurface, Cartridge cartridge) {
         this.keyboard = keyboard;
         this.cartridge = cartridge;
-        this.context = new GameContext(keyboard, displaySurface);
+        this.events = new EventBus();
+        this.context = new GameContext(keyboard, displaySurface, events);
     }
 
     public void start() {
@@ -19,8 +23,14 @@ public final class CartridgeRuntime {
             throw new IllegalStateException("Runtime already started");
         }
 
-        keyboard.addInputListener(event -> cartridge.onInput(context, event));
+        events.subscribe(KeyInputEvent.class, envelope -> cartridge.onInput(context, envelope.event()));
+        keyboard.addInputListener(event -> events.emit(event, keyboard, EventTags.INPUT, EventTags.KEYBOARD));
         cartridge.start(context);
         started = true;
+    }
+
+    @Override
+    public void close() {
+        events.close();
     }
 }

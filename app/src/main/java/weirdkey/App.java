@@ -23,38 +23,37 @@ public final class App {
 
         InMemoryKeyboard keyboard = new InMemoryKeyboard(LogitechG915XTopology.create());
         DisplaySurface display = message -> System.out.println("[display] " + message);
-        CartridgeRuntime runtime = new CartridgeRuntime(
-            keyboard,
-            Optional.of(display),
-            new FirstExperimentCartridge()
-        );
-
-        runtime.start();
-        printLitKeys(keyboard.litKeys());
-
-        if (args.length == 0) {
-            System.out.println("Pass key ids as arguments to simulate presses.");
-            System.out.println("Use PRESS:KEY, HOLD:KEY, or RELEASE:KEY; bare KEY defaults to PRESS.");
-            return;
-        }
-
-        for (String argument : args) {
-            KeyInputEvent event = parse(argument);
-            keyboard.emit(event);
-            System.out.println("Input: " + event.type() + " " + event.keyId());
+        try (CartridgeRuntime runtime = new CartridgeRuntime(
+                keyboard,
+                Optional.of(display),
+                new FirstExperimentCartridge()
+            )) {
+            runtime.start();
             printLitKeys(keyboard.litKeys());
+
+            if (args.length == 0) {
+                System.out.println("Pass key ids as arguments to simulate presses.");
+                System.out.println("Use PRESS:KEY, HOLD:KEY, or RELEASE:KEY; bare KEY defaults to PRESS.");
+                return;
+            }
+
+            for (String argument : args) {
+                KeyInputEvent event = parse(argument);
+                keyboard.emit(event);
+                System.out.println("Input: " + event.type() + " " + event.keyId());
+                printLitKeys(keyboard.litKeys());
+            }
         }
     }
 
     private static void runHardware() {
-        try (WindowsLogitechKeyboard keyboard = new WindowsLogitechKeyboard()) {
-            DisplaySurface display = message -> System.out.println("[display] " + message);
+        DisplaySurface display = message -> System.out.println("[display] " + message);
+        try (WindowsLogitechKeyboard keyboard = new WindowsLogitechKeyboard();
             CartridgeRuntime runtime = new CartridgeRuntime(
                 keyboard,
                 Optional.of(display),
                 new FirstExperimentCartridge()
-            );
-
+            )) {
             runtime.start();
             System.out.println("Weirdkey is running on the G915 X. Press Esc to quit.");
             keyboard.runUntilEscape();
