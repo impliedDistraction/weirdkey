@@ -34,6 +34,7 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
     private final List<Consumer<KeyInputEvent>> listeners = new ArrayList<>();
     private final Set<String> pressedKeys = new HashSet<>();
     private final LowLevelKeyboardProc keyboardProc = this::handleKeyboardEvent;
+    private Set<String> capturedKeys = Set.of();
     private HHOOK hook;
     private boolean closed;
 
@@ -92,6 +93,12 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
         listeners.add(listener);
     }
 
+    @Override
+    public void captureInputKeys(Set<String> keyIds) {
+        keyIds.forEach(keyId -> topology.key(keyId).orElseThrow(() -> new IllegalArgumentException("Unknown key: " + keyId)));
+        capturedKeys = Set.copyOf(keyIds);
+    }
+
     public void runUntilEscape() {
         if (hook != null) {
             throw new IllegalStateException("Keyboard input loop is already running");
@@ -140,6 +147,9 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
                     User32.INSTANCE.PostQuitMessage(0);
                 } else if (keyId != null) {
                     emit(keyId, keyDown);
+                    if (shouldSuppress(messageId, keyId, capturedKeys)) {
+                        return new LRESULT(1);
+                    }
                 }
             }
         }
@@ -166,6 +176,19 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
 
         KeyInputEvent event = new KeyInputEvent(keyId, type);
         List.copyOf(listeners).forEach(listener -> listener.accept(event));
+    }
+
+    static boolean shouldSuppress(int messageId, String keyId, Set<String> capturedKeys) {
+        if (keyId == null || "ESC".equals(keyId)) {
+            return false;
+        }
+        if (messageId != WinUser.WM_KEYDOWN
+            && messageId != WinUser.WM_SYSKEYDOWN
+            && messageId != WinUser.WM_KEYUP
+            && messageId != WinUser.WM_SYSKEYUP) {
+            return false;
+        }
+        return capturedKeys.contains(keyId);
     }
 
     private static KeyboardTopology supportedTopology() {
