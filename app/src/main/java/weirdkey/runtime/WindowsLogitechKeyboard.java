@@ -34,6 +34,8 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
     private final List<Consumer<KeyInputEvent>> listeners = new ArrayList<>();
     private final Set<String> pressedKeys = new HashSet<>();
     private final LowLevelKeyboardProc keyboardProc = this::handleKeyboardEvent;
+    private Set<String> capturedKeys = Set.of();
+    private RuntimeException listenerFailure;
     private HHOOK hook;
     private boolean closed;
 
@@ -92,11 +94,18 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
         listeners.add(listener);
     }
 
+    @Override
+    public void captureInputKeys(Set<String> keyIds) {
+        keyIds.forEach(keyId -> topology.key(keyId).orElseThrow(() -> new IllegalArgumentException("Unknown key: " + keyId)));
+        capturedKeys = Set.copyOf(keyIds);
+    }
+
     public void runUntilEscape() {
         if (hook != null) {
             throw new IllegalStateException("Keyboard input loop is already running");
         }
 
+        listenerFailure = null;
         hook = User32.INSTANCE.SetWindowsHookEx(WinUser.WH_KEYBOARD_LL, keyboardProc, null, 0);
         if (hook == null) {
             throw new IllegalStateException("Unable to install the Windows keyboard hook");
@@ -108,6 +117,10 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
             while ((result = User32.INSTANCE.GetMessage(message, null, 0, 0)) > 0) {
                 User32.INSTANCE.TranslateMessage(message);
                 User32.INSTANCE.DispatchMessage(message);
+            }
+            RuntimeException failure = takeListenerFailure();
+            if (failure != null) {
+                throw failure;
             }
             if (result < 0) {
                 throw new IllegalStateException("Windows keyboard message loop failed");
@@ -136,10 +149,22 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
             boolean keyUp = messageId == WinUser.WM_KEYUP || messageId == WinUser.WM_SYSKEYUP;
             if (keyDown || keyUp) {
                 String keyId = keyId(event);
+                boolean suppress = shouldSuppress(messageId, keyId, capturedKeys);
                 if ("ESC".equals(keyId) && keyDown) {
                     User32.INSTANCE.PostQuitMessage(0);
                 } else if (keyId != null) {
-                    emit(keyId, keyDown);
+                    try {
+                        emit(keyId, keyDown);
+                    } catch (RuntimeException exception) {
+                        if (listenerFailure == null) {
+                            listenerFailure = exception;
+                        }
+                        User32.INSTANCE.PostQuitMessage(1);
+                        return new LRESULT(1);
+                    }
+                    if (suppress) {
+                        return new LRESULT(1);
+                    }
                 }
             }
         }
@@ -166,6 +191,25 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
 
         KeyInputEvent event = new KeyInputEvent(keyId, type);
         List.copyOf(listeners).forEach(listener -> listener.accept(event));
+    }
+
+    static boolean shouldSuppress(int messageId, String keyId, Set<String> capturedKeys) {
+        if (keyId == null || "ESC".equals(keyId)) {
+            return false;
+        }
+        if (messageId != WinUser.WM_KEYDOWN
+            && messageId != WinUser.WM_SYSKEYDOWN
+            && messageId != WinUser.WM_KEYUP
+            && messageId != WinUser.WM_SYSKEYUP) {
+            return false;
+        }
+        return capturedKeys.contains(keyId);
+    }
+
+    private RuntimeException takeListenerFailure() {
+        RuntimeException failure = listenerFailure;
+        listenerFailure = null;
+        return failure;
     }
 
     private static KeyboardTopology supportedTopology() {

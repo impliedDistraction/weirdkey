@@ -1,5 +1,6 @@
 package weirdkey.runtime;
 
+import java.util.Set;
 import java.util.function.Consumer;
 
 public interface KeyboardDevice {
@@ -10,4 +11,6 @@ public interface KeyboardDevice {
     void clearColor(String keyId);
 
     void addInputListener(Consumer<KeyInputEvent> listener);
+
+    void captureInputKeys(Set<String> keyIds);
 }

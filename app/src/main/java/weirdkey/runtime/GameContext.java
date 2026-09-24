@@ -1,6 +1,8 @@
 package weirdkey.runtime;
 
+import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 
 public final class GameContext {
     private final KeyboardDevice keyboard;
@@ -25,5 +27,9 @@ public final class GameContext {
 
     public void showStatus(String message) {
         displaySurface.ifPresent(surface -> surface.showStatus(message));
+    }
+
+    public void captureInputKeys(Collection<String> keyIds) {
+        keyboard.captureInputKeys(Set.copyOf(keyIds));
     }
 }

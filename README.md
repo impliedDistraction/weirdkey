@@ -26,4 +26,4 @@ Install Logitech G HUB, connect the keyboard, and run:
 ./gradlew :app:run --args="--hardware"
 ```
 
-Weirdkey saves the current lighting, turns the keyboard dark, and lights one key green. Press the green key to advance; press Esc to quit and restore the saved lighting. Set `WEIRDKEY_LOGITECH_LED_DLL` only if G HUB's LED SDK DLL is installed outside its standard location.
+Weirdkey saves the current lighting, turns the keyboard dark, and lights one key green. Captured gameplay keys stay inside Weirdkey instead of reaching the foreground Windows app, while Esc remains available to quit and restore the saved lighting. Set `WEIRDKEY_LOGITECH_LED_DLL` only if G HUB's LED SDK DLL is installed outside its standard location.

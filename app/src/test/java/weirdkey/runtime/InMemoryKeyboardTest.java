@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class InMemoryKeyboardTest {
@@ -25,5 +26,16 @@ class InMemoryKeyboardTest {
             ),
             seenEvents
         );
+    }
+
+    @Test
+    void tracksConfiguredCapturedKeys() {
+        InMemoryKeyboard keyboard = new InMemoryKeyboard(
+            new KeyboardTopology(List.of(new KeyDefinition("A", 0, 0), new KeyDefinition("B", 0, 1)))
+        );
+
+        keyboard.captureInputKeys(Set.of("A", "B"));
+
+        assertEquals(Set.of("A", "B"), keyboard.capturedKeyIds());
     }
 }

@@ -19,6 +19,7 @@ public final class FirstExperimentCartridge implements Cartridge {
             throw new IllegalStateException("Topology must contain at least one key");
         }
 
+        context.captureInputKeys(keyCycle);
         activeIndex = 0;
         lightActiveKey(context);
     }
