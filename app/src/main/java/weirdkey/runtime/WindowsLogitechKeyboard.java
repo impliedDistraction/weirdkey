@@ -161,6 +161,7 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
                             listenerFailure = exception;
                         }
                         User32.INSTANCE.PostQuitMessage(1);
+                        return new LRESULT(1);
                     }
                     if (suppress) {
                         return new LRESULT(1);
