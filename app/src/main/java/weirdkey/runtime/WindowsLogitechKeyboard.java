@@ -118,9 +118,8 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
                 User32.INSTANCE.TranslateMessage(message);
                 User32.INSTANCE.DispatchMessage(message);
             }
-            if (listenerFailure != null) {
-                RuntimeException failure = listenerFailure;
-                listenerFailure = null;
+            RuntimeException failure = takeListenerFailure();
+            if (failure != null) {
                 throw failure;
             }
             if (result < 0) {
@@ -205,6 +204,12 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
             return false;
         }
         return capturedKeys.contains(keyId);
+    }
+
+    private RuntimeException takeListenerFailure() {
+        RuntimeException failure = listenerFailure;
+        listenerFailure = null;
+        return failure;
     }
 
     private static KeyboardTopology supportedTopology() {
