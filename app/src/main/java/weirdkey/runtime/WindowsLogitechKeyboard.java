@@ -33,6 +33,7 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
     private final LogitechLedSdk ledSdk;
     private final List<Consumer<KeyInputEvent>> listeners = new ArrayList<>();
     private final Set<String> pressedKeys = new HashSet<>();
+    private final Set<String> suppressedKeys = new HashSet<>();
     private final LowLevelKeyboardProc keyboardProc = this::handleKeyboardEvent;
     private Set<String> capturedKeys = Set.of();
     private RuntimeException listenerFailure;
@@ -106,6 +107,8 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
         }
 
         listenerFailure = null;
+        pressedKeys.clear();
+        suppressedKeys.clear();
         hook = User32.INSTANCE.SetWindowsHookEx(WinUser.WH_KEYBOARD_LL, keyboardProc, null, 0);
         if (hook == null) {
             throw new IllegalStateException("Unable to install the Windows keyboard hook");
@@ -149,7 +152,7 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
             boolean keyUp = messageId == WinUser.WM_KEYUP || messageId == WinUser.WM_SYSKEYUP;
             if (keyDown || keyUp) {
                 String keyId = keyId(event);
-                boolean suppress = shouldSuppress(messageId, keyId, capturedKeys);
+                boolean suppress = shouldSuppress(messageId, keyId, capturedKeys, suppressedKeys);
                 if ("ESC".equals(keyId) && keyDown) {
                     User32.INSTANCE.PostQuitMessage(0);
                 } else if (keyId != null) {
@@ -193,17 +196,27 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
         List.copyOf(listeners).forEach(listener -> listener.accept(event));
     }
 
-    static boolean shouldSuppress(int messageId, String keyId, Set<String> capturedKeys) {
+    static boolean shouldSuppress(
+        int messageId,
+        String keyId,
+        Set<String> capturedKeys,
+        Set<String> suppressedKeys
+    ) {
         if (keyId == null || "ESC".equals(keyId)) {
             return false;
         }
-        if (messageId != WinUser.WM_KEYDOWN
-            && messageId != WinUser.WM_SYSKEYDOWN
-            && messageId != WinUser.WM_KEYUP
-            && messageId != WinUser.WM_SYSKEYUP) {
-            return false;
+        if (messageId == WinUser.WM_KEYDOWN || messageId == WinUser.WM_SYSKEYDOWN) {
+            if (suppressedKeys.contains(keyId)) {
+                return true;
+            }
+            if (capturedKeys.contains(keyId)) {
+                suppressedKeys.add(keyId);
+                return true;
+            }
+        } else if (messageId == WinUser.WM_KEYUP || messageId == WinUser.WM_SYSKEYUP) {
+            return suppressedKeys.remove(keyId);
         }
-        return capturedKeys.contains(keyId);
+        return false;
     }
 
     private RuntimeException takeListenerFailure() {

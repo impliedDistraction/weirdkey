@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.jna.platform.win32.WinUser;
+import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -35,11 +36,50 @@ class WindowsLogitechKeyboardTest {
     @Test
     void suppressesOnlyCapturedGameplayKeys() {
         Set<String> capturedKeys = Set.of("F1", "F2");
+        Set<String> suppressedKeys = new HashSet<>();
 
-        assertTrue(WindowsLogitechKeyboard.shouldSuppress(WinUser.WM_KEYDOWN, "F1", capturedKeys));
-        assertTrue(WindowsLogitechKeyboard.shouldSuppress(WinUser.WM_KEYUP, "F2", capturedKeys));
-        assertFalse(WindowsLogitechKeyboard.shouldSuppress(WinUser.WM_KEYDOWN, "ESC", capturedKeys));
-        assertFalse(WindowsLogitechKeyboard.shouldSuppress(WinUser.WM_KEYDOWN, "A", capturedKeys));
-        assertFalse(WindowsLogitechKeyboard.shouldSuppress(0x0200, "F1", capturedKeys));
+        assertTrue(WindowsLogitechKeyboard.shouldSuppress(WinUser.WM_KEYDOWN, "F1", capturedKeys, suppressedKeys));
+        assertTrue(WindowsLogitechKeyboard.shouldSuppress(WinUser.WM_KEYUP, "F1", capturedKeys, suppressedKeys));
+        assertFalse(WindowsLogitechKeyboard.shouldSuppress(WinUser.WM_KEYDOWN, "ESC", capturedKeys, suppressedKeys));
+        assertFalse(WindowsLogitechKeyboard.shouldSuppress(WinUser.WM_KEYDOWN, "A", capturedKeys, suppressedKeys));
+        assertFalse(WindowsLogitechKeyboard.shouldSuppress(0x0200, "F1", capturedKeys, suppressedKeys));
+    }
+
+    @Test
+    void preservesSuppressionDecisionForTheWholePhysicalPress() {
+        Set<String> suppressedKeys = new HashSet<>();
+
+        assertTrue(WindowsLogitechKeyboard.shouldSuppress(
+            WinUser.WM_KEYDOWN,
+            "F1",
+            Set.of("F1"),
+            suppressedKeys
+        ));
+        assertTrue(WindowsLogitechKeyboard.shouldSuppress(
+            WinUser.WM_KEYDOWN,
+            "F1",
+            Set.of(),
+            suppressedKeys
+        ));
+        assertTrue(WindowsLogitechKeyboard.shouldSuppress(
+            WinUser.WM_KEYUP,
+            "F1",
+            Set.of(),
+            suppressedKeys
+        ));
+        assertTrue(suppressedKeys.isEmpty());
+
+        assertFalse(WindowsLogitechKeyboard.shouldSuppress(
+            WinUser.WM_KEYDOWN,
+            "F2",
+            Set.of(),
+            suppressedKeys
+        ));
+        assertFalse(WindowsLogitechKeyboard.shouldSuppress(
+            WinUser.WM_KEYUP,
+            "F2",
+            Set.of("F2"),
+            suppressedKeys
+        ));
     }
 }
