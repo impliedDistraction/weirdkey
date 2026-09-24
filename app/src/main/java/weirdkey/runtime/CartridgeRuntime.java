@@ -8,30 +8,75 @@ import weirdkey.runtime.events.EventTags;
 public final class CartridgeRuntime implements AutoCloseable {
     private final KeyboardDevice keyboard;
     private final Cartridge cartridge;
+    private final RuntimeLifecycle lifecycle;
     private final EventBus events;
     private final GameContext context;
+    private final Object cycleLock = new Object();
     private boolean started;
+    private boolean closed;
 
     public CartridgeRuntime(KeyboardDevice keyboard, Optional<DisplaySurface> displaySurface, Cartridge cartridge) {
         this.keyboard = keyboard;
         this.cartridge = cartridge;
-        this.events = new EventBus();
-        this.context = new GameContext(keyboard, displaySurface, events);
+        this.lifecycle = new RuntimeLifecycle();
+        this.events = new EventBus(this::dispatchEvent);
+        this.context = new GameContext(keyboard, displaySurface, events, lifecycle);
     }
 
     public void start() {
-        if (started) {
-            throw new IllegalStateException("Runtime already started");
-        }
+        synchronized (cycleLock) {
+            if (closed) {
+                throw new IllegalStateException("Runtime is closed");
+            }
+            if (started) {
+                throw new IllegalStateException("Runtime already started");
+            }
 
-        events.subscribe(KeyInputEvent.class, envelope -> cartridge.onInput(context, envelope.event()));
-        keyboard.addInputListener(event -> events.emit(event, keyboard, EventTags.INPUT, EventTags.KEYBOARD));
-        cartridge.start(context);
-        started = true;
+            events.subscribe(KeyInputEvent.class, envelope -> cartridge.onInput(context, envelope.event()));
+            keyboard.addInputListener(event -> events.emit(event, keyboard, EventTags.INPUT, EventTags.KEYBOARD));
+            runCycle(() -> cartridge.start(context));
+            started = true;
+        }
+    }
+
+    private void dispatchEvent(Runnable eventDispatch) {
+        synchronized (cycleLock) {
+            Optional<LifecyclePhase> currentPhase = lifecycle.currentPhase();
+            if (currentPhase.isEmpty()) {
+                runCycle(eventDispatch);
+                return;
+            }
+            if (currentPhase.get() != LifecyclePhase.UPDATE) {
+                throw new IllegalStateException("Events can only be emitted during UPDATE or between cycles");
+            }
+            eventDispatch.run();
+        }
+    }
+
+    private void runCycle(Runnable updateAction) {
+        try {
+            lifecycle.run(LifecyclePhase.PRE_UPDATE, () -> {
+            });
+            lifecycle.run(LifecyclePhase.UPDATE, updateAction);
+            lifecycle.run(LifecyclePhase.POST_UPDATE, () -> {
+            });
+            lifecycle.run(LifecyclePhase.COMMIT, () -> {
+            });
+            context.commitOutputs();
+        } catch (RuntimeException exception) {
+            context.discardOutputs();
+            throw exception;
+        }
     }
 
     @Override
     public void close() {
-        events.close();
+        synchronized (cycleLock) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            events.close();
+        }
     }
 }

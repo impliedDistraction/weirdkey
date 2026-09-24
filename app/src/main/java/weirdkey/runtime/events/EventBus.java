@@ -16,12 +16,21 @@ public final class EventBus implements AutoCloseable {
     private final List<Subscriber<?>> subscribers = new ArrayList<>();
     private final List<CompletableFuture<?>> pendingEmissions = new ArrayList<>();
     private final Object dispatchLock = new Object();
+    private final Consumer<Runnable> dispatchBoundary;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
         Thread thread = new Thread(runnable, "weirdkey-events");
         thread.setDaemon(true);
         return thread;
     });
     private boolean closed;
+
+    public EventBus() {
+        this(Runnable::run);
+    }
+
+    public EventBus(Consumer<Runnable> dispatchBoundary) {
+        this.dispatchBoundary = dispatchBoundary;
+    }
 
     public <E> EventSubscription subscribe(Class<E> eventType, Consumer<EventEnvelope<E>> listener) {
         return subscribe(eventType, Set.of(), Integer.MAX_VALUE, listener);
@@ -67,6 +76,11 @@ public final class EventBus implements AutoCloseable {
 
     public <E> EventEmission<E> emit(E event, Object emitter, Set<EventTag> tags) {
         EventEnvelope<E> envelope = new EventEnvelope<>(event, emitter, tags);
+        dispatchBoundary.accept(() -> dispatch(envelope));
+        return new EventEmission<>(this, envelope);
+    }
+
+    private void dispatch(EventEnvelope<?> envelope) {
         synchronized (dispatchLock) {
             List<Subscriber<?>> snapshot;
             synchronized (subscribers) {
@@ -83,7 +97,6 @@ public final class EventBus implements AutoCloseable {
                     subscribers.removeIf(subscriber -> !subscriber.isActive());
                 }
             }
-            return new EventEmission<>(this, envelope);
         }
     }
 

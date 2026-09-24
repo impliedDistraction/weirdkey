@@ -46,3 +46,21 @@ context.events()
 ```
 
 Dispatch is ordered and fail-fast. Delayed events are serialized with immediate events, and closing the cartridge runtime cancels pending delayed emissions.
+
+## Runtime lifecycle
+
+Every top-level event runs through a deterministic cycle:
+
+```text
+PRE_UPDATE -> UPDATE -> POST_UPDATE -> COMMIT -> apply device output
+```
+
+Event subscribers and `Cartridge.onInput(...)` run during UPDATE. Cartridge state remains ordinary Java state owned by the cartridge. Phase callbacks can observe it at explicit boundaries:
+
+```java
+context.onPhase(LifecyclePhase.PRE_UPDATE, validation::check);
+context.onPhase(LifecyclePhase.UPDATE, movement::update);
+context.onPhase(LifecyclePhase.POST_UPDATE, console::inspect);
+```
+
+Calls such as `lightKey`, `clearKey`, and `showStatus` are buffered until all COMMIT callbacks finish. POST_UPDATE therefore sees completed logical state before physical or display output changes. Reentrant events remain in the current UPDATE; delayed events begin a fresh cycle. A callback failure aborts later phases and discards buffered output for that cycle.
