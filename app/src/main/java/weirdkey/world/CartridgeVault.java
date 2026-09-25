@@ -90,9 +90,7 @@ public final class CartridgeVault {
         String description = String.join(System.lineSeparator(), lines.subList(frontmatterEnd + 1, lines.size())).trim();
         String id = required(metadata, "id", manifestPath);
         String name = required(metadata, "name", manifestPath);
-        CartridgeAvailability availability = CartridgeAvailability.valueOf(
-            required(metadata, "availability", manifestPath).trim().toUpperCase()
-        );
+        CartridgeAvailability availability = parseAvailability(required(metadata, "availability", manifestPath), manifestPath);
         Optional<String> entry = Optional.ofNullable(metadata.get("entry"));
         if (availability == CartridgeAvailability.AVAILABLE && entry.isEmpty()) {
             throw new IllegalStateException("Available cartridge is missing entry metadata in " + manifestPath);
@@ -124,5 +122,16 @@ public final class CartridgeVault {
             throw new IllegalStateException("Missing " + key + " in " + manifestPath);
         }
         return value;
+    }
+
+    private static CartridgeAvailability parseAvailability(String value, Path manifestPath) {
+        try {
+            return CartridgeAvailability.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException(
+                "Invalid availability '" + value + "' in " + manifestPath + ". Expected AVAILABLE or UNAVAILABLE.",
+                exception
+            );
+        }
     }
 }

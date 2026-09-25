@@ -17,6 +17,7 @@ final class NoCartridgeState implements Cartridge {
     private final List<CartridgeManifest> cartridges;
     private final Consumer<CartridgeManifest> launchAction;
     private List<Selection> selections = List.of();
+    private String pauseKeyId;
 
     NoCartridgeState(List<CartridgeManifest> cartridges, Consumer<CartridgeManifest> launchAction) {
         this.cartridges = List.copyOf(cartridges);
@@ -40,8 +41,13 @@ final class NoCartridgeState implements Cartridge {
             discoveredSelections.add(new Selection(keyId, manifest));
         }
         selections = List.copyOf(discoveredSelections);
+        pauseKeyId = assignableKeys.contains("PAUSE") ? "PAUSE" : null;
 
-        context.captureInputKeys(selections.stream().map(Selection::keyId).toList());
+        List<String> capturedKeys = new ArrayList<>(selections.stream().map(Selection::keyId).toList());
+        if (pauseKeyId != null && !capturedKeys.contains(pauseKeyId)) {
+            capturedKeys.add(pauseKeyId);
+        }
+        context.captureInputKeys(capturedKeys);
         selections.forEach(selection -> context.lightKey(
             selection.keyId(),
             selection.manifest().availability() == CartridgeAvailability.AVAILABLE ? KeyColor.GREEN : UNAVAILABLE_COLOR
@@ -52,6 +58,10 @@ final class NoCartridgeState implements Cartridge {
 
     private void onInput(CartridgeContext context, KeyInputEvent event) {
         if (event.type() != InputType.PRESS) {
+            return;
+        }
+        if (pauseKeyId != null && pauseKeyId.equals(event.keyId())) {
+            context.showStatus(renderRoster());
             return;
         }
 
