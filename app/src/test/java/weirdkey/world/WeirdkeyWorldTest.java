@@ -5,12 +5,15 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import weirdkey.runtime.InMemoryKeyboard;
+import weirdkey.runtime.InstallationContext;
+import weirdkey.runtime.InstallationState;
 import weirdkey.runtime.KeyColor;
 import weirdkey.runtime.KeyDefinition;
 import weirdkey.runtime.KeyInputEvent;
@@ -88,6 +91,29 @@ class WeirdkeyWorldTest {
         assertEquals(Optional.of(new KeyColor(96, 96, 0)), keyboard.colorOf("F2"));
     }
 
+    @Test
+    void installationStateSubscriptionsSurviveLaunchAndReturn() {
+        InMemoryKeyboard keyboard = keyboard("F1", "F2", "PAUSE");
+        PersistentProbe probe = new PersistentProbe();
+
+        try (WeirdkeyWorld world = new WeirdkeyWorld(
+                keyboard,
+                Optional.empty(),
+                new CartridgeVault(repositoryRoot().resolve("cartridges")),
+                List.of(probe)
+            )) {
+            world.start();
+
+            keyboard.emit(new KeyInputEvent("F2", InputType.PRESS));
+            keyboard.emit(new KeyInputEvent("F1", InputType.PRESS));
+            keyboard.emit(new KeyInputEvent("PAUSE", InputType.PRESS));
+            keyboard.emit(new KeyInputEvent("F2", InputType.PRESS));
+        }
+
+        assertEquals(1, probe.installs.get());
+        assertEquals(4, probe.inputs.get());
+    }
+
     private static String last(List<String> values) {
         return values.get(values.size() - 1);
     }
@@ -112,5 +138,16 @@ class WeirdkeyWorldTest {
             current = current.getParent();
         }
         throw new IllegalStateException("Could not locate repository root");
+    }
+
+    private static final class PersistentProbe implements InstallationState {
+        private final AtomicInteger installs = new AtomicInteger();
+        private final AtomicInteger inputs = new AtomicInteger();
+
+        @Override
+        public void install(InstallationContext context) {
+            installs.incrementAndGet();
+            context.on(KeyInputEvent.class, event -> inputs.incrementAndGet());
+        }
     }
 }

@@ -4,20 +4,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-import weirdkey.runtime.Cartridge;
-import weirdkey.runtime.CartridgeContext;
+import weirdkey.runtime.InstallationContext;
+import weirdkey.runtime.InstallationState;
 import weirdkey.runtime.InputType;
 import weirdkey.runtime.KeyColor;
 import weirdkey.runtime.KeyDefinition;
 import weirdkey.runtime.KeyInputEvent;
 
-final class NoCartridgeState implements Cartridge {
+final class NoCartridgeState implements InstallationState {
     private static final KeyColor UNAVAILABLE_COLOR = new KeyColor(96, 96, 0);
 
     private final List<CartridgeManifest> cartridges;
     private final Consumer<CartridgeManifest> launchAction;
     private List<Selection> selections = List.of();
     private String pauseKeyId;
+    private boolean active;
 
     NoCartridgeState(List<CartridgeManifest> cartridges, Consumer<CartridgeManifest> launchAction) {
         this.cartridges = List.copyOf(cartridges);
@@ -25,7 +26,7 @@ final class NoCartridgeState implements Cartridge {
     }
 
     @Override
-    public void install(CartridgeContext context) {
+    public void install(InstallationContext context) {
         pauseKeyId = context.topology().orderedKeys().stream()
             .map(KeyDefinition::id)
             .filter("PAUSE"::equals)
@@ -46,7 +47,12 @@ final class NoCartridgeState implements Cartridge {
             discoveredSelections.add(new Selection(keyId, manifest));
         }
         selections = List.copyOf(discoveredSelections);
+        activate(context);
+        context.on(KeyInputEvent.class, event -> onInput(context, event));
+    }
 
+    void activate(InstallationContext context) {
+        active = true;
         List<String> capturedKeys = new ArrayList<>(selections.stream().map(Selection::keyId).toList());
         if (pauseKeyId != null && !capturedKeys.contains(pauseKeyId)) {
             capturedKeys.add(pauseKeyId);
@@ -57,11 +63,16 @@ final class NoCartridgeState implements Cartridge {
             selection.manifest().availability() == CartridgeAvailability.AVAILABLE ? KeyColor.GREEN : UNAVAILABLE_COLOR
         ));
         context.showStatus(renderRoster());
-        context.on(KeyInputEvent.class, event -> onInput(context, event));
     }
 
-    private void onInput(CartridgeContext context, KeyInputEvent event) {
-        if (event.type() != InputType.PRESS) {
+    void deactivate(InstallationContext context) {
+        active = false;
+        context.captureInputKeys(List.of());
+        selections.forEach(selection -> context.clearKey(selection.keyId()));
+    }
+
+    private void onInput(InstallationContext context, KeyInputEvent event) {
+        if (!active || event.type() != InputType.PRESS) {
             return;
         }
         if (pauseKeyId != null && pauseKeyId.equals(event.keyId())) {
@@ -80,7 +91,6 @@ final class NoCartridgeState implements Cartridge {
         CartridgeManifest manifest = selection.manifest();
         if (manifest.availability() == CartridgeAvailability.AVAILABLE) {
             launchAction.accept(manifest);
-            context.exit();
             return;
         }
 
