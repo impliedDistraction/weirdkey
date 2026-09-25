@@ -18,6 +18,7 @@ public final class CartridgeRuntime implements AutoCloseable {
     private boolean started;
     private boolean closed;
     private boolean stopRequested;
+    private int cycleDepth;
 
     public CartridgeRuntime(KeyboardDevice keyboard, Optional<DisplaySurface> displaySurface, Cartridge cartridge) {
         this(keyboard, displaySurface, cartridge, () -> {
@@ -82,12 +83,14 @@ public final class CartridgeRuntime implements AutoCloseable {
                     throw new IllegalStateException("Events can only be emitted during UPDATE or between cycles");
                 }
                 eventDispatch.run();
+                notifyStop = closeIfRequested();
             }
         }
         notifyStop(notifyStop);
     }
 
     private void runCycle(Runnable updateAction) {
+        cycleDepth++;
         try {
             lifecycle.run(LifecyclePhase.PRE_UPDATE, () -> {
             });
@@ -98,6 +101,8 @@ public final class CartridgeRuntime implements AutoCloseable {
         } catch (RuntimeException exception) {
             context.discardOutputs();
             throw exception;
+        } finally {
+            cycleDepth--;
         }
     }
 
@@ -122,7 +127,7 @@ public final class CartridgeRuntime implements AutoCloseable {
     }
 
     private boolean closeIfRequested() {
-        if (!stopRequested) {
+        if (!stopRequested || cycleDepth > 0) {
             return false;
         }
         return closeInternal();
