@@ -2,15 +2,15 @@ package weirdkey;
 
 import java.util.Map;
 import java.util.Optional;
+import java.nio.file.Path;
 
-import weirdkey.cartridges.FirstExperimentCartridge;
-import weirdkey.runtime.CartridgeRuntime;
 import weirdkey.runtime.DisplaySurface;
 import weirdkey.runtime.InMemoryKeyboard;
 import weirdkey.runtime.InputType;
 import weirdkey.runtime.KeyInputEvent;
 import weirdkey.runtime.LogitechG915XTopology;
 import weirdkey.runtime.WindowsLogitechKeyboard;
+import weirdkey.world.WeirdkeyWorld;
 
 public final class App {
     private App() {
@@ -24,10 +24,10 @@ public final class App {
 
         InMemoryKeyboard keyboard = new InMemoryKeyboard(LogitechG915XTopology.create());
         DisplaySurface display = message -> System.out.println("[display] " + message);
-        try (CartridgeRuntime runtime = new CartridgeRuntime(
+        try (WeirdkeyWorld runtime = new WeirdkeyWorld(
                 keyboard,
                 Optional.of(display),
-                new FirstExperimentCartridge()
+                Path.of("cartridges")
             )) {
             runtime.start();
             printLitKeys(keyboard.litKeys());
@@ -50,10 +50,10 @@ public final class App {
     private static void runHardware() {
         DisplaySurface display = message -> System.out.println("[display] " + message);
         try (WindowsLogitechKeyboard keyboard = new WindowsLogitechKeyboard();
-            CartridgeRuntime runtime = new CartridgeRuntime(
+            WeirdkeyWorld runtime = new WeirdkeyWorld(
                 keyboard,
                 Optional.of(display),
-                new FirstExperimentCartridge()
+                Path.of("cartridges")
             )) {
             runtime.start();
             System.out.println("Weirdkey is running on the G915 X. Press Esc to quit.");

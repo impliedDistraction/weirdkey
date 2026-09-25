@@ -27,6 +27,11 @@ public final class FirstExperimentCartridge implements Cartridge {
     }
 
     private void onInput(CartridgeContext context, KeyInputEvent event) {
+        if (event.type() == InputType.PRESS && "PAUSE".equals(event.keyId())) {
+            context.showStatus("Returning to Weirdkey.");
+            context.exit();
+            return;
+        }
         if (event.type() != InputType.PRESS || !activeKeyId().equals(event.keyId())) {
             return;
         }

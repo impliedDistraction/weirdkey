@@ -109,4 +109,8 @@ public final class CartridgeContext {
     public void captureInputKeys(Collection<String> keyIds) {
         game.captureInputKeys(keyIds);
     }
+
+    public void exit() {
+        game.exit();
+    }
 }
