@@ -2,12 +2,12 @@ package weirdkey.runtime;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import com.sun.jna.Library;
@@ -32,7 +32,7 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
 
     private final KeyboardTopology topology;
     private final LogitechLedSdk ledSdk;
-    private final List<Consumer<KeyInputEvent>> listeners = new ArrayList<>();
+    private final List<Consumer<KeyInputEvent>> listeners = new CopyOnWriteArrayList<>();
     private final Set<String> pressedKeys = new HashSet<>();
     private final Set<String> suppressedKeys = new HashSet<>();
     private final LowLevelKeyboardProc keyboardProc = this::handleKeyboardEvent;
@@ -92,8 +92,24 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
     }
 
     @Override
-    public void addInputListener(Consumer<KeyInputEvent> listener) {
+    public InputSubscription addInputListener(Consumer<KeyInputEvent> listener) {
         listeners.add(listener);
+        return new InputSubscription() {
+            private volatile boolean active = true;
+
+            @Override
+            public boolean isActive() {
+                return active;
+            }
+
+            @Override
+            public void cancel() {
+                if (active) {
+                    active = false;
+                    listeners.remove(listener);
+                }
+            }
+        };
     }
 
     @Override

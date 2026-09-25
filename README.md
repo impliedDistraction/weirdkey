@@ -63,4 +63,4 @@ context.onPhase(LifecyclePhase.UPDATE, movement::update);
 context.onPhase(LifecyclePhase.POST_UPDATE, console::inspect);
 ```
 
-Calls such as `lightKey`, `clearKey`, and `showStatus` are buffered until all COMMIT callbacks finish. POST_UPDATE therefore sees completed logical state before physical or display output changes. Reentrant events remain in the current UPDATE; delayed events begin a fresh cycle. A callback failure aborts later phases and discards buffered output for that cycle.
+Calls such as `lightKey`, `clearKey`, and `showStatus` are buffered until all COMMIT callbacks finish, then applied while the runtime remains in COMMIT. POST_UPDATE therefore sees completed logical state before physical or display output changes. Reentrant events remain in the current UPDATE; delayed events begin a fresh cycle. A callback failure aborts later phases and discards buffered output for that cycle. Device application is best-effort: once physical I/O begins, a later device failure cannot roll back earlier commands.

@@ -1,16 +1,16 @@
 package weirdkey.runtime;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 public final class InMemoryKeyboard implements KeyboardDevice {
     private final KeyboardTopology topology;
-    private final List<Consumer<KeyInputEvent>> listeners = new ArrayList<>();
+    private final List<Consumer<KeyInputEvent>> listeners = new CopyOnWriteArrayList<>();
     private final Map<String, KeyColor> litKeys = new LinkedHashMap<>();
     private Set<String> capturedKeys = Set.of();
 
@@ -36,8 +36,24 @@ public final class InMemoryKeyboard implements KeyboardDevice {
     }
 
     @Override
-    public void addInputListener(Consumer<KeyInputEvent> listener) {
+    public InputSubscription addInputListener(Consumer<KeyInputEvent> listener) {
         listeners.add(listener);
+        return new InputSubscription() {
+            private volatile boolean active = true;
+
+            @Override
+            public boolean isActive() {
+                return active;
+            }
+
+            @Override
+            public void cancel() {
+                if (active) {
+                    active = false;
+                    listeners.remove(listener);
+                }
+            }
+        };
     }
 
     @Override

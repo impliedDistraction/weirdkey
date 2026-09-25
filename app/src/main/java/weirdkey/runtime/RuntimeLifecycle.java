@@ -30,6 +30,16 @@ final class RuntimeLifecycle {
         }
     }
 
+    synchronized void runAfterCallbacks(LifecyclePhase phase, Runnable action) {
+        currentPhase = phase;
+        try {
+            List.copyOf(callbacks.get(phase)).forEach(Runnable::run);
+            action.run();
+        } finally {
+            currentPhase = null;
+        }
+    }
+
     synchronized Optional<LifecyclePhase> currentPhase() {
         return Optional.ofNullable(currentPhase);
     }

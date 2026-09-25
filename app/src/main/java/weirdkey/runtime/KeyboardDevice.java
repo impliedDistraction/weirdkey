@@ -10,7 +10,7 @@ public interface KeyboardDevice {
 
     void clearColor(String keyId);
 
-    void addInputListener(Consumer<KeyInputEvent> listener);
+    InputSubscription addInputListener(Consumer<KeyInputEvent> listener);
 
     void captureInputKeys(Set<String> keyIds);
 }

@@ -3,6 +3,7 @@ package weirdkey.runtime;
 import java.util.Optional;
 
 import weirdkey.runtime.events.EventBus;
+import weirdkey.runtime.events.EventSubscription;
 import weirdkey.runtime.events.EventTags;
 
 public final class CartridgeRuntime implements AutoCloseable {
@@ -12,6 +13,8 @@ public final class CartridgeRuntime implements AutoCloseable {
     private final EventBus events;
     private final GameContext context;
     private final Object cycleLock = new Object();
+    private EventSubscription cartridgeInputSubscription;
+    private InputSubscription keyboardInputSubscription;
     private boolean started;
     private boolean closed;
 
@@ -32,10 +35,26 @@ public final class CartridgeRuntime implements AutoCloseable {
                 throw new IllegalStateException("Runtime already started");
             }
 
-            events.subscribe(KeyInputEvent.class, envelope -> cartridge.onInput(context, envelope.event()));
-            keyboard.addInputListener(event -> events.emit(event, keyboard, EventTags.INPUT, EventTags.KEYBOARD));
-            runCycle(() -> cartridge.start(context));
             started = true;
+            try {
+                cartridgeInputSubscription = events.subscribe(
+                    KeyInputEvent.class,
+                    envelope -> cartridge.onInput(context, envelope.event())
+                );
+                keyboardInputSubscription = keyboard.addInputListener(event -> {
+                    synchronized (cycleLock) {
+                        if (!closed) {
+                            events.emit(event, keyboard, EventTags.INPUT, EventTags.KEYBOARD);
+                        }
+                    }
+                });
+                runCycle(() -> cartridge.start(context));
+            } catch (RuntimeException exception) {
+                closed = true;
+                cancelSubscriptions();
+                events.close();
+                throw exception;
+            }
         }
     }
 
@@ -60,9 +79,7 @@ public final class CartridgeRuntime implements AutoCloseable {
             lifecycle.run(LifecyclePhase.UPDATE, updateAction);
             lifecycle.run(LifecyclePhase.POST_UPDATE, () -> {
             });
-            lifecycle.run(LifecyclePhase.COMMIT, () -> {
-            });
-            context.commitOutputs();
+            lifecycle.runAfterCallbacks(LifecyclePhase.COMMIT, context::commitOutputs);
         } catch (RuntimeException exception) {
             context.discardOutputs();
             throw exception;
@@ -76,7 +93,19 @@ public final class CartridgeRuntime implements AutoCloseable {
                 return;
             }
             closed = true;
+            cancelSubscriptions();
             events.close();
+        }
+    }
+
+    private void cancelSubscriptions() {
+        if (keyboardInputSubscription != null) {
+            keyboardInputSubscription.cancel();
+            keyboardInputSubscription = null;
+        }
+        if (cartridgeInputSubscription != null) {
+            cartridgeInputSubscription.cancel();
+            cartridgeInputSubscription = null;
         }
     }
 }

@@ -273,6 +273,107 @@ class CartridgeRuntimeTest {
         assertTrue(keyboard.colorOf("A").isEmpty());
     }
 
+    @Test
+    void closeDetachesTheKeyboardListener() {
+        InMemoryKeyboard keyboard = keyboard("A");
+        AtomicInteger inputs = new AtomicInteger();
+        Cartridge cartridge = new Cartridge() {
+            @Override
+            public void start(GameContext context) {
+            }
+
+            @Override
+            public void onInput(GameContext context, KeyInputEvent event) {
+                inputs.incrementAndGet();
+            }
+        };
+        CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge);
+        runtime.start();
+
+        runtime.close();
+        keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+
+        assertEquals(0, inputs.get());
+    }
+
+    @Test
+    void failedStartupCleansUpAndCannotBeRetried() {
+        InMemoryKeyboard keyboard = keyboard("A");
+        AtomicInteger starts = new AtomicInteger();
+        Cartridge cartridge = new Cartridge() {
+            @Override
+            public void start(GameContext context) {
+                starts.incrementAndGet();
+                throw new IllegalStateException("failed startup");
+            }
+
+            @Override
+            public void onInput(GameContext context, KeyInputEvent event) {
+                throw new AssertionError("failed runtime must not receive input");
+            }
+        };
+        CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge);
+
+        assertThrows(IllegalStateException.class, runtime::start);
+        keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+        IllegalStateException retryFailure = assertThrows(IllegalStateException.class, runtime::start);
+
+        assertEquals("Runtime is closed", retryFailure.getMessage());
+        assertEquals(1, starts.get());
+    }
+
+    @Test
+    void appliesDeviceOutputDuringCommitPhase() {
+        InMemoryKeyboard delegate = keyboard("A");
+        AtomicReference<GameContext> contextReference = new AtomicReference<>();
+        AtomicReference<LifecyclePhase> outputPhase = new AtomicReference<>();
+        KeyboardDevice keyboard = new KeyboardDevice() {
+            @Override
+            public KeyboardTopology topology() {
+                return delegate.topology();
+            }
+
+            @Override
+            public void setColor(String keyId, KeyColor color) {
+                outputPhase.set(contextReference.get().currentPhase().orElseThrow());
+                delegate.setColor(keyId, color);
+            }
+
+            @Override
+            public void clearColor(String keyId) {
+                delegate.clearColor(keyId);
+            }
+
+            @Override
+            public InputSubscription addInputListener(java.util.function.Consumer<KeyInputEvent> listener) {
+                return delegate.addInputListener(listener);
+            }
+
+            @Override
+            public void captureInputKeys(Set<String> keyIds) {
+                delegate.captureInputKeys(keyIds);
+            }
+        };
+        Cartridge cartridge = new Cartridge() {
+            @Override
+            public void start(GameContext context) {
+                contextReference.set(context);
+                context.lightKey("A", KeyColor.GREEN);
+            }
+
+            @Override
+            public void onInput(GameContext context, KeyInputEvent event) {
+            }
+        };
+
+        try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge)) {
+            runtime.start();
+        }
+
+        assertEquals(LifecyclePhase.COMMIT, outputPhase.get());
+        assertEquals(Optional.of(KeyColor.GREEN), delegate.colorOf("A"));
+    }
+
     private static InMemoryKeyboard keyboard(String... keyIds) {
         return new InMemoryKeyboard(
             new KeyboardTopology(

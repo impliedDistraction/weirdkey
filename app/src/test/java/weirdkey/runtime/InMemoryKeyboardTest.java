@@ -1,6 +1,7 @@
 package weirdkey.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,5 +38,20 @@ class InMemoryKeyboardTest {
         keyboard.captureInputKeys(Set.of("A", "B"));
 
         assertEquals(Set.of("A", "B"), keyboard.capturedKeyIds());
+    }
+
+    @Test
+    void cancelledInputListenersStopReceivingEvents() {
+        InMemoryKeyboard keyboard = new InMemoryKeyboard(
+            new KeyboardTopology(List.of(new KeyDefinition("A", 0, 0)))
+        );
+        List<KeyInputEvent> seenEvents = new ArrayList<>();
+        InputSubscription subscription = keyboard.addInputListener(seenEvents::add);
+
+        subscription.cancel();
+        keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+
+        assertFalse(subscription.isActive());
+        assertEquals(List.of(), seenEvents);
     }
 }
