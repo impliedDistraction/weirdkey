@@ -3,6 +3,7 @@ package weirdkey;
 import java.util.Map;
 import java.util.Optional;
 import java.nio.file.Path;
+import java.nio.file.Files;
 
 import weirdkey.runtime.DisplaySurface;
 import weirdkey.runtime.InMemoryKeyboard;
@@ -27,7 +28,7 @@ public final class App {
         try (WeirdkeyWorld runtime = new WeirdkeyWorld(
                 keyboard,
                 Optional.of(display),
-                Path.of("cartridges")
+                cartridgeVaultPath()
             )) {
             runtime.start();
             printLitKeys(keyboard.litKeys());
@@ -53,7 +54,7 @@ public final class App {
             WeirdkeyWorld runtime = new WeirdkeyWorld(
                 keyboard,
                 Optional.of(display),
-                Path.of("cartridges")
+                cartridgeVaultPath()
             )) {
             runtime.start();
             System.out.println("Weirdkey is running on the G915 X. Press Esc to quit.");
@@ -72,5 +73,17 @@ public final class App {
 
     private static void printLitKeys(Map<String, ?> litKeys) {
         System.out.println("Lit keys: " + litKeys.keySet());
+    }
+
+    private static Path cartridgeVaultPath() {
+        Path current = Path.of("").toAbsolutePath();
+        while (current != null) {
+            Path candidate = current.resolve("cartridges");
+            if (Files.isDirectory(candidate)) {
+                return candidate;
+            }
+            current = current.getParent();
+        }
+        return Path.of("cartridges");
     }
 }
