@@ -100,6 +100,9 @@ class ProgressionCartridgeTest {
             ),
             result.observations()
         );
+        assertEquals(List.of("NUMPAD_5", "NUMPAD_4", "NUMPAD_1", "NUMPAD_0"), result.actorRoute());
+        assertEquals(3, result.blockedActorMoves());
+        assertEquals(0, result.failedActions());
     }
 
     @Test
@@ -115,6 +118,7 @@ class ProgressionCartridgeTest {
 
         ProgressionCartridge.Result result = (ProgressionCartridge.Result) cartridge.result().orElseThrow();
         assertTrue(result.observations().contains(ProgressionCartridge.Observation.REPEATED_FAILED_ACTION));
+        assertEquals(3, result.failedActions());
     }
 
     private static InMemoryKeyboard keyboard() {

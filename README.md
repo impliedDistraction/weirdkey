@@ -31,6 +31,17 @@ Install Logitech G HUB, connect the keyboard, and run:
 
 Weirdkey saves the current lighting, turns the keyboard dark, and lights one key green. Captured gameplay keys stay inside Weirdkey instead of reaching the foreground Windows app, while Esc remains available to quit and restore the saved lighting. Set `WEIRDKEY_LOGITECH_LED_DLL` only if G HUB's LED SDK DLL is installed outside its standard location.
 
+## Record a playtest
+
+Add `--playtest` to either launch mode:
+
+```powershell
+./gradlew :app:run --args="--hardware --playtest"
+./gradlew :app:run --args="--playtest F1 F1 F2 F3 F2 F1"
+```
+
+Each run creates an ignored directory under `playtests/sessions/` containing metadata, a timestamped JSONL event trace, a generated summary, and a notes template. Only keys currently captured by Weirdkey are recorded. See `playtests/README.md` for the playtest protocol and artifact details.
+
 ## Runtime events
 
 Cartridges implement one installation method and compose the events and phases they need. Executable state remains ordinary fields on the cartridge:

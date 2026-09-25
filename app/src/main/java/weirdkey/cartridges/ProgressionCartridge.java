@@ -36,12 +36,14 @@ public final class ProgressionCartridge implements Cartridge {
     private static final Set<String> REQUIRED_KEYS = requiredKeys();
 
     private final EnumSet<Observation> observations = EnumSet.noneOf(Observation.class);
+    private final List<String> actorRoute = new ArrayList<>(List.of("NUMPAD_5"));
     private int tutorialIndex;
     private String playerKey;
     private String actorKey = "NUMPAD_5";
     private boolean otherLayerVisible;
     private boolean escaped;
     private int failedActions;
+    private int blockedActorMoves;
 
     @Override
     public void install(CartridgeContext context) {
@@ -131,9 +133,13 @@ public final class ProgressionCartridge implements Cartridge {
             ? null
             : NUMPAD_KEYS.get(new Position(current.row() + delta.row(), current.column() + delta.column()));
         if (attemptedDestination == null || BLOCKERS.contains(attemptedDestination)) {
+            if (delta != null) {
+                blockedActorMoves++;
+            }
             return;
         }
         actorKey = attemptedDestination;
+        actorRoute.add(actorKey);
         observations.add(Observation.PROTECTED_OTHER_LIGHT);
     }
 
@@ -173,7 +179,7 @@ public final class ProgressionCartridge implements Cartridge {
 
     @Override
     public Optional<CartridgeResult> result() {
-        return Optional.of(new Result(observations, escaped));
+        return Optional.of(new Result(observations, escaped, actorRoute, blockedActorMoves, failedActions));
     }
 
     private static Map<String, List<String>> playerPaths() {
@@ -227,9 +233,16 @@ public final class ProgressionCartridge implements Cartridge {
         PROTECTED_OTHER_LIGHT
     }
 
-    public record Result(Set<Observation> observations, boolean escaped) implements CartridgeResult {
+    public record Result(
+        Set<Observation> observations,
+        boolean escaped,
+        List<String> actorRoute,
+        int blockedActorMoves,
+        int failedActions
+    ) implements CartridgeResult {
         public Result {
             observations = Set.copyOf(observations);
+            actorRoute = List.copyOf(actorRoute);
         }
     }
 }

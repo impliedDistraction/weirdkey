@@ -3,6 +3,7 @@ package weirdkey.world;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 import weirdkey.runtime.Cartridge;
 import weirdkey.runtime.CartridgeResult;
@@ -18,6 +19,7 @@ public final class WeirdkeyWorld implements AutoCloseable {
     private final Optional<DisplaySurface> displaySurface;
     private final CartridgeVault cartridgeVault;
     private final List<InstallationState> installationStates;
+    private final Consumer<CartridgeResult> cartridgeResultConsumer;
     private InstallationRuntime installationRuntime;
     private NoCartridgeState noCartridgeState;
     private Cartridge activeCartridge;
@@ -28,7 +30,17 @@ public final class WeirdkeyWorld implements AutoCloseable {
     private boolean closed;
 
     public WeirdkeyWorld(KeyboardDevice keyboard, Optional<DisplaySurface> displaySurface, Path cartridgeVaultPath) {
-        this(keyboard, displaySurface, new CartridgeVault(cartridgeVaultPath), List.of());
+        this(keyboard, displaySurface, cartridgeVaultPath, result -> {
+        });
+    }
+
+    public WeirdkeyWorld(
+        KeyboardDevice keyboard,
+        Optional<DisplaySurface> displaySurface,
+        Path cartridgeVaultPath,
+        Consumer<CartridgeResult> cartridgeResultConsumer
+    ) {
+        this(keyboard, displaySurface, new CartridgeVault(cartridgeVaultPath), List.of(), cartridgeResultConsumer);
     }
 
     WeirdkeyWorld(
@@ -37,10 +49,22 @@ public final class WeirdkeyWorld implements AutoCloseable {
         CartridgeVault cartridgeVault,
         List<InstallationState> installationStates
     ) {
+        this(keyboard, displaySurface, cartridgeVault, installationStates, result -> {
+        });
+    }
+
+    WeirdkeyWorld(
+        KeyboardDevice keyboard,
+        Optional<DisplaySurface> displaySurface,
+        CartridgeVault cartridgeVault,
+        List<InstallationState> installationStates,
+        Consumer<CartridgeResult> cartridgeResultConsumer
+    ) {
         this.keyboard = keyboard;
         this.displaySurface = displaySurface;
         this.cartridgeVault = cartridgeVault;
         this.installationStates = List.copyOf(installationStates);
+        this.cartridgeResultConsumer = cartridgeResultConsumer;
     }
 
     public void start() {
@@ -116,6 +140,7 @@ public final class WeirdkeyWorld implements AutoCloseable {
 
         activeRuntime = null;
         lastCartridgeResult = activeCartridge.result();
+        lastCartridgeResult.ifPresent(cartridgeResultConsumer);
         activeCartridge = null;
         prepareDeviceForNextState();
         installationRuntime.run(noCartridgeState::activate);

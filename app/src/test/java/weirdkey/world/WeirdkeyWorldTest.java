@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
+import weirdkey.cartridges.ProgressionCartridge;
+import weirdkey.runtime.CartridgeResult;
 import weirdkey.runtime.InMemoryKeyboard;
 import weirdkey.runtime.InstallationContext;
 import weirdkey.runtime.InstallationState;
@@ -20,7 +22,6 @@ import weirdkey.runtime.KeyInputEvent;
 import weirdkey.runtime.KeyboardTopology;
 import weirdkey.runtime.InputType;
 import weirdkey.runtime.LogitechG915XTopology;
-import weirdkey.cartridges.ProgressionCartridge;
 
 class WeirdkeyWorldTest {
     @Test
@@ -119,11 +120,13 @@ class WeirdkeyWorldTest {
     @Test
     void completedProgressionReturnsItsResultToTheWorld() {
         InMemoryKeyboard keyboard = new InMemoryKeyboard(LogitechG915XTopology.create());
+        List<CartridgeResult> deliveredResults = new ArrayList<>();
 
         try (WeirdkeyWorld world = new WeirdkeyWorld(
                 keyboard,
                 Optional.empty(),
-                repositoryRoot().resolve("cartridges")
+            repositoryRoot().resolve("cartridges"),
+            deliveredResults::add
             )) {
             world.start();
 
@@ -132,6 +135,7 @@ class WeirdkeyWorldTest {
             ProgressionCartridge.Result result =
                 (ProgressionCartridge.Result) world.lastCartridgeResult().orElseThrow();
             assertTrue(result.escaped());
+            assertEquals(List.of(result), deliveredResults);
             assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("F1"));
         }
     }
