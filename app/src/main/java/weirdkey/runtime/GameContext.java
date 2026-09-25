@@ -13,18 +13,21 @@ final class GameContext {
     private final Optional<DisplaySurface> displaySurface;
     private final EventBus events;
     private final RuntimeLifecycle lifecycle;
+    private final Runnable exitAction;
     private final List<Runnable> pendingOutputs = new ArrayList<>();
 
     GameContext(
         KeyboardDevice keyboard,
         Optional<DisplaySurface> displaySurface,
         EventBus events,
-        RuntimeLifecycle lifecycle
+        RuntimeLifecycle lifecycle,
+        Runnable exitAction
     ) {
         this.keyboard = keyboard;
         this.displaySurface = displaySurface;
         this.events = events;
         this.lifecycle = lifecycle;
+        this.exitAction = exitAction;
     }
 
     public KeyboardTopology topology() {
@@ -58,6 +61,10 @@ final class GameContext {
     public void captureInputKeys(Collection<String> keyIds) {
         Set<String> capturedKeys = Set.copyOf(keyIds);
         pendingOutputs.add(() -> keyboard.captureInputKeys(capturedKeys));
+    }
+
+    public void exit() {
+        exitAction.run();
     }
 
     void commitOutputs() {

@@ -155,6 +155,41 @@ class CartridgeRuntimeTest {
     }
 
     @Test
+    void exitRequestedByAReentrantEventClosesAfterTheCurrentCycle() {
+        InMemoryKeyboard keyboard = keyboard("A");
+        List<String> order = new ArrayList<>();
+        AtomicInteger stops = new AtomicInteger();
+        Cartridge cartridge = new Cartridge() {
+            @Override
+            public void install(CartridgeContext context) {
+                context.on(String.class, event -> {
+                    order.add(event);
+                    context.exit();
+                });
+                context.preUpdate(() -> order.add("pre"));
+                context.update(() -> order.add("update"));
+                context.postUpdate(() -> order.add("post"));
+                context.commit(() -> order.add("commit"));
+                context.on(KeyInputEvent.class, event -> {
+                    order.add("input");
+                    context.emit("nested");
+                });
+            }
+        };
+
+        try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge, stops::incrementAndGet)) {
+            runtime.start();
+            order.clear();
+
+            keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+            keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+        }
+
+        assertEquals(List.of("pre", "input", "nested", "update", "post", "commit"), order);
+        assertEquals(1, stops.get());
+    }
+
+    @Test
     void delayedEventsRunInTheirOwnLifecycleCycle() throws Exception {
         InMemoryKeyboard keyboard = keyboard("A");
         AtomicReference<CartridgeContext> contextReference = new AtomicReference<>();
