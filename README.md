@@ -6,7 +6,7 @@ Put the game in the controller. weirdkey is a tiny Java runtime for cartridge-st
 
 - `LogitechG915XTopology` models the first keyboard target as an ordered world map.
 - `KeyboardDevice` exposes per-key RGB output plus press / hold / release input events.
-- `CartridgeRuntime` runs a cartridge against a keyboard, with an optional display surface.
+- `CartridgeRuntime` installs a cartridge's event and lifecycle composition against a keyboard, with an optional display surface.
 - `FirstExperimentCartridge` implements the first experiment: light one key, wait for the player to press it, turn it off, then light the next key.
 
 ## Run the first experiment
@@ -30,18 +30,23 @@ Weirdkey saves the current lighting, turns the keyboard dark, and lights one key
 
 ## Runtime events
 
-Cartridges can use `GameContext.events()` to publish and subscribe without adding device-specific callbacks. Events carry their emitter and tags, subscriptions can expire after a fixed number of deliveries, and completed emissions can chain immediate or delayed follow-ups:
+Cartridges implement one installation method and compose the events and phases they need. Executable state remains ordinary fields on the cartridge:
+
+```java
+public void install(CartridgeContext context) {
+	context.on(KeyInputEvent.class, this::handleInput);
+	context.postUpdate(debugger::inspect);
+}
+```
+
+`CartridgeContext` can publish and subscribe without adding device-specific methods to `Cartridge`. Events carry their emitter and tags, subscriptions can expire after a fixed number of deliveries, and completed emissions can chain immediate or delayed follow-ups:
 
 ```java
 EventTag gameplay = new EventTag("gameplay");
 
-context.events().subscribeTimes(KeyInputEvent.class, 3, envelope -> {
-	KeyboardDevice keyboard = envelope.emitterAs(KeyboardDevice.class).orElseThrow();
-	System.out.println(keyboard.topology());
-});
+context.onTimes(KeyInputEvent.class, 3, event -> System.out.println(event.keyId()));
 
-context.events()
-	.emit(new InvalidAction("Expected F4"), this, gameplay)
+context.emit(new InvalidAction("Expected F4"), gameplay)
 	.thenEmitAfter(Duration.ofMillis(150), new FeedbackFinished());
 ```
 
@@ -55,12 +60,14 @@ Every top-level event runs through a deterministic cycle:
 PRE_UPDATE -> UPDATE -> POST_UPDATE -> COMMIT -> apply device output
 ```
 
-Event subscribers and `Cartridge.onInput(...)` run during UPDATE. Cartridge state remains ordinary Java state owned by the cartridge. Phase callbacks can observe it at explicit boundaries:
+Event subscribers run during UPDATE. Cartridge state remains ordinary Java state owned by the cartridge. Phase callbacks can observe it at explicit boundaries:
 
 ```java
-context.onPhase(LifecyclePhase.PRE_UPDATE, validation::check);
-context.onPhase(LifecyclePhase.UPDATE, movement::update);
-context.onPhase(LifecyclePhase.POST_UPDATE, console::inspect);
+context.preUpdate(validation::check);
+context.update(movement::update);
+context.postUpdate(console::inspect);
 ```
 
 Calls such as `lightKey`, `clearKey`, and `showStatus` are buffered until all COMMIT callbacks finish, then applied while the runtime remains in COMMIT. POST_UPDATE therefore sees completed logical state before physical or display output changes. Reentrant events remain in the current UPDATE; delayed events begin a fresh cycle. A callback failure aborts later phases and discards buffered output for that cycle. Device application is best-effort: once physical I/O begins, a later device failure cannot roll back earlier commands.
+
+New events may be emitted during UPDATE or between cycles. PRE_UPDATE, POST_UPDATE, and COMMIT callbacks are observation boundaries and cannot start another event chain.

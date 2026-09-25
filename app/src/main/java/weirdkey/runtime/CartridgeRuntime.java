@@ -3,7 +3,6 @@ package weirdkey.runtime;
 import java.util.Optional;
 
 import weirdkey.runtime.events.EventBus;
-import weirdkey.runtime.events.EventSubscription;
 import weirdkey.runtime.events.EventTags;
 
 public final class CartridgeRuntime implements AutoCloseable {
@@ -12,8 +11,8 @@ public final class CartridgeRuntime implements AutoCloseable {
     private final RuntimeLifecycle lifecycle;
     private final EventBus events;
     private final GameContext context;
+    private final CartridgeContext cartridgeContext;
     private final Object cycleLock = new Object();
-    private EventSubscription cartridgeInputSubscription;
     private InputSubscription keyboardInputSubscription;
     private boolean started;
     private boolean closed;
@@ -24,6 +23,7 @@ public final class CartridgeRuntime implements AutoCloseable {
         this.lifecycle = new RuntimeLifecycle();
         this.events = new EventBus(this::dispatchEvent);
         this.context = new GameContext(keyboard, displaySurface, events, lifecycle);
+        this.cartridgeContext = new CartridgeContext(context, cartridge);
     }
 
     public void start() {
@@ -37,10 +37,6 @@ public final class CartridgeRuntime implements AutoCloseable {
 
             started = true;
             try {
-                cartridgeInputSubscription = events.subscribe(
-                    KeyInputEvent.class,
-                    envelope -> cartridge.onInput(context, envelope.event())
-                );
                 keyboardInputSubscription = keyboard.addInputListener(event -> {
                     synchronized (cycleLock) {
                         if (!closed) {
@@ -48,7 +44,7 @@ public final class CartridgeRuntime implements AutoCloseable {
                         }
                     }
                 });
-                runCycle(() -> cartridge.start(context));
+                runCycle(() -> cartridge.install(cartridgeContext));
             } catch (RuntimeException exception) {
                 closed = true;
                 cancelSubscriptions();
@@ -102,10 +98,6 @@ public final class CartridgeRuntime implements AutoCloseable {
         if (keyboardInputSubscription != null) {
             keyboardInputSubscription.cancel();
             keyboardInputSubscription = null;
-        }
-        if (cartridgeInputSubscription != null) {
-            cartridgeInputSubscription.cancel();
-            cartridgeInputSubscription = null;
         }
     }
 }

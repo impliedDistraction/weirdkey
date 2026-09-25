@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
@@ -23,22 +24,13 @@ class CartridgeRuntimeTest {
         InMemoryKeyboard keyboard = new InMemoryKeyboard(
             new KeyboardTopology(List.of(new KeyDefinition("A", 0, 0), new KeyDefinition("B", 0, 1)))
         );
-        CartridgeRuntime runtime = new CartridgeRuntime(
-            keyboard,
-            Optional.empty(),
-            new Cartridge() {
-                @Override
-                public void start(GameContext context) {
-                    context.captureInputKeys(List.of("A", "B"));
-                }
-
-                @Override
-                public void onInput(GameContext context, KeyInputEvent event) {
-                }
-            }
-        );
-
-        runtime.start();
+        try (CartridgeRuntime runtime = new CartridgeRuntime(
+                keyboard,
+                Optional.empty(),
+                context -> context.captureInputKeys(List.of("A", "B"))
+            )) {
+            runtime.start();
+        }
 
         assertEquals(Set.of("A", "B"), keyboard.capturedKeyIds());
     }
@@ -49,16 +41,11 @@ class CartridgeRuntimeTest {
             new KeyboardTopology(List.of(new KeyDefinition("A", 0, 0)))
         );
         List<EventEnvelope<KeyInputEvent>> seen = new java.util.ArrayList<>();
-        Cartridge cartridge = new Cartridge() {
-            @Override
-            public void start(GameContext context) {
-                context.events().subscribe(KeyInputEvent.class, Set.of(EventTags.INPUT), seen::add);
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
-            }
-        };
+        Cartridge cartridge = context -> context.onEnvelope(
+            KeyInputEvent.class,
+            Set.of(EventTags.INPUT),
+            seen::add
+        );
 
         try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge)) {
             runtime.start();
@@ -72,6 +59,35 @@ class CartridgeRuntimeTest {
     }
 
     @Test
+    void composesPhysicalInputIntoLogicalEventsAndOutput() {
+        InMemoryKeyboard keyboard = keyboard("A");
+        List<PlayerMoved> movements = new ArrayList<>();
+        List<Object> emitters = new ArrayList<>();
+        Cartridge cartridge = context -> {
+            context.on(KeyInputEvent.class, event -> {
+                if (event.type() == InputType.PRESS) {
+                    context.emit(new PlayerMoved(event.keyId()));
+                }
+            });
+            context.onEnvelope(PlayerMoved.class, envelope -> {
+                emitters.add(envelope.emitter());
+                PlayerMoved movement = envelope.event();
+                movements.add(movement);
+                context.lightKey(movement.destination(), KeyColor.GREEN);
+            });
+        };
+
+        try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge)) {
+            runtime.start();
+            keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+        }
+
+        assertEquals(List.of(new PlayerMoved("A")), movements);
+    assertSame(cartridge, emitters.get(0));
+        assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("A"));
+    }
+
+    @Test
     void runsOrderedPhasesAndCommitsOutputsAfterObservation() {
         InMemoryKeyboard keyboard = keyboard("A");
         List<String> order = new ArrayList<>();
@@ -79,22 +95,20 @@ class CartridgeRuntimeTest {
             private int presses;
 
             @Override
-            public void start(GameContext context) {
-                context.onPhase(LifecyclePhase.PRE_UPDATE, () -> order.add("pre"));
-                context.onPhase(LifecyclePhase.UPDATE, () -> order.add("update"));
-                context.onPhase(LifecyclePhase.POST_UPDATE, () -> {
+            public void install(CartridgeContext context) {
+                context.preUpdate(() -> order.add("pre"));
+                context.update(() -> order.add("update"));
+                context.postUpdate(() -> {
                     order.add("post:" + presses + ":" + keyboard.colorOf("A").isPresent());
                 });
-                context.onPhase(LifecyclePhase.COMMIT, () -> {
+                context.commit(() -> {
                     order.add("commit:" + keyboard.colorOf("A").isPresent());
                 });
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
-                order.add("event");
-                presses++;
-                context.lightKey("A", KeyColor.GREEN);
+                context.on(KeyInputEvent.class, event -> {
+                    order.add("event");
+                    presses++;
+                    context.lightKey("A", KeyColor.GREEN);
+                });
             }
         };
 
@@ -118,18 +132,16 @@ class CartridgeRuntimeTest {
         List<String> order = new ArrayList<>();
         Cartridge cartridge = new Cartridge() {
             @Override
-            public void start(GameContext context) {
-                context.events().subscribe(String.class, envelope -> order.add(envelope.event()));
-                context.onPhase(LifecyclePhase.PRE_UPDATE, () -> order.add("pre"));
-                context.onPhase(LifecyclePhase.UPDATE, () -> order.add("update"));
-                context.onPhase(LifecyclePhase.POST_UPDATE, () -> order.add("post"));
-                context.onPhase(LifecyclePhase.COMMIT, () -> order.add("commit"));
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
-                order.add("input");
-                context.events().emit("nested", this);
+            public void install(CartridgeContext context) {
+                context.on(String.class, order::add);
+                context.preUpdate(() -> order.add("pre"));
+                context.update(() -> order.add("update"));
+                context.postUpdate(() -> order.add("post"));
+                context.commit(() -> order.add("commit"));
+                context.on(KeyInputEvent.class, event -> {
+                    order.add("input");
+                    context.emit("nested");
+                });
             }
         };
 
@@ -145,20 +157,13 @@ class CartridgeRuntimeTest {
     @Test
     void delayedEventsRunInTheirOwnLifecycleCycle() throws Exception {
         InMemoryKeyboard keyboard = keyboard("A");
-        AtomicReference<GameContext> contextReference = new AtomicReference<>();
+        AtomicReference<CartridgeContext> contextReference = new AtomicReference<>();
         AtomicInteger preUpdates = new AtomicInteger();
         AtomicInteger postUpdates = new AtomicInteger();
-        Cartridge cartridge = new Cartridge() {
-            @Override
-            public void start(GameContext context) {
-                contextReference.set(context);
-                context.onPhase(LifecyclePhase.PRE_UPDATE, preUpdates::incrementAndGet);
-                context.onPhase(LifecyclePhase.POST_UPDATE, postUpdates::incrementAndGet);
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
-            }
+        Cartridge cartridge = context -> {
+            contextReference.set(context);
+            context.preUpdate(preUpdates::incrementAndGet);
+            context.postUpdate(postUpdates::incrementAndGet);
         };
 
         try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge)) {
@@ -166,11 +171,9 @@ class CartridgeRuntimeTest {
             preUpdates.set(0);
             postUpdates.set(0);
 
-            contextReference.get().events().emitAfter(
+            contextReference.get().emitAfter(
                 Duration.ofMillis(10),
-                "delayed",
-                this,
-                Set.of()
+                "delayed"
             ).get(1, TimeUnit.SECONDS);
         }
 
@@ -181,17 +184,10 @@ class CartridgeRuntimeTest {
     @Test
     void failedUpdatesDiscardBufferedOutputs() {
         InMemoryKeyboard keyboard = keyboard("A");
-        Cartridge cartridge = new Cartridge() {
-            @Override
-            public void start(GameContext context) {
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
+        Cartridge cartridge = context -> context.on(KeyInputEvent.class, event -> {
                 context.lightKey("A", KeyColor.GREEN);
                 throw new IllegalStateException("failed update");
-            }
-        };
+            });
 
         try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge)) {
             runtime.start();
@@ -205,25 +201,41 @@ class CartridgeRuntimeTest {
     }
 
     @Test
+    void observationPhasesCannotEmitEvents() {
+        InMemoryKeyboard keyboard = keyboard("A");
+        AtomicInteger postUpdates = new AtomicInteger();
+        Cartridge cartridge = context -> context.postUpdate(() -> {
+            if (postUpdates.incrementAndGet() > 1) {
+                context.emit("too late");
+            }
+        });
+
+        try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge)) {
+            runtime.start();
+            IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> keyboard.emit(new KeyInputEvent("A", InputType.PRESS))
+            );
+            assertEquals("Events can only be emitted during UPDATE or between cycles", failure.getMessage());
+        }
+    }
+
+    @Test
     void failedPostUpdateAbortsCommitAndDiscardsBufferedOutputs() {
         InMemoryKeyboard keyboard = keyboard("A");
         List<String> seenPhases = new ArrayList<>();
         AtomicInteger postUpdates = new AtomicInteger();
         Cartridge cartridge = new Cartridge() {
             @Override
-            public void start(GameContext context) {
-                context.onPhase(LifecyclePhase.POST_UPDATE, () -> {
+            public void install(CartridgeContext context) {
+                context.postUpdate(() -> {
                     seenPhases.add("post");
                     if (postUpdates.incrementAndGet() > 1) {
                         throw new IllegalStateException("failed observation");
                     }
                 });
-                context.onPhase(LifecyclePhase.COMMIT, () -> seenPhases.add("commit"));
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
-                context.lightKey("A", KeyColor.GREEN);
+                context.commit(() -> seenPhases.add("commit"));
+                context.on(KeyInputEvent.class, event -> context.lightKey("A", KeyColor.GREEN));
             }
         };
 
@@ -247,17 +259,13 @@ class CartridgeRuntimeTest {
         AtomicInteger commits = new AtomicInteger();
         Cartridge cartridge = new Cartridge() {
             @Override
-            public void start(GameContext context) {
-                context.onPhase(LifecyclePhase.COMMIT, () -> {
+            public void install(CartridgeContext context) {
+                context.commit(() -> {
                     if (commits.incrementAndGet() > 1) {
                         throw new IllegalStateException("failed commit");
                     }
                 });
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
-                context.lightKey("A", KeyColor.GREEN);
+                context.on(KeyInputEvent.class, event -> context.lightKey("A", KeyColor.GREEN));
             }
         };
 
@@ -277,21 +285,12 @@ class CartridgeRuntimeTest {
     void closeDetachesTheKeyboardListener() {
         InMemoryKeyboard keyboard = keyboard("A");
         AtomicInteger inputs = new AtomicInteger();
-        Cartridge cartridge = new Cartridge() {
-            @Override
-            public void start(GameContext context) {
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
-                inputs.incrementAndGet();
-            }
-        };
-        CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge);
-        runtime.start();
-
-        runtime.close();
-        keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+        Cartridge cartridge = context -> context.on(KeyInputEvent.class, event -> inputs.incrementAndGet());
+        try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge)) {
+            runtime.start();
+            runtime.close();
+            keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+        }
 
         assertEquals(0, inputs.get());
     }
@@ -300,23 +299,19 @@ class CartridgeRuntimeTest {
     void failedStartupCleansUpAndCannotBeRetried() {
         InMemoryKeyboard keyboard = keyboard("A");
         AtomicInteger starts = new AtomicInteger();
-        Cartridge cartridge = new Cartridge() {
-            @Override
-            public void start(GameContext context) {
-                starts.incrementAndGet();
-                throw new IllegalStateException("failed startup");
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
+        Cartridge cartridge = context -> {
+            starts.incrementAndGet();
+            context.on(KeyInputEvent.class, event -> {
                 throw new AssertionError("failed runtime must not receive input");
-            }
+            });
+            throw new IllegalStateException("failed startup");
         };
-        CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge);
-
-        assertThrows(IllegalStateException.class, runtime::start);
-        keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
-        IllegalStateException retryFailure = assertThrows(IllegalStateException.class, runtime::start);
+        IllegalStateException retryFailure;
+        try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge)) {
+            assertThrows(IllegalStateException.class, runtime::start);
+            keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+            retryFailure = assertThrows(IllegalStateException.class, runtime::start);
+        }
 
         assertEquals("Runtime is closed", retryFailure.getMessage());
         assertEquals(1, starts.get());
@@ -325,7 +320,7 @@ class CartridgeRuntimeTest {
     @Test
     void appliesDeviceOutputDuringCommitPhase() {
         InMemoryKeyboard delegate = keyboard("A");
-        AtomicReference<GameContext> contextReference = new AtomicReference<>();
+        AtomicReference<CartridgeContext> contextReference = new AtomicReference<>();
         AtomicReference<LifecyclePhase> outputPhase = new AtomicReference<>();
         KeyboardDevice keyboard = new KeyboardDevice() {
             @Override
@@ -354,16 +349,9 @@ class CartridgeRuntimeTest {
                 delegate.captureInputKeys(keyIds);
             }
         };
-        Cartridge cartridge = new Cartridge() {
-            @Override
-            public void start(GameContext context) {
-                contextReference.set(context);
-                context.lightKey("A", KeyColor.GREEN);
-            }
-
-            @Override
-            public void onInput(GameContext context, KeyInputEvent event) {
-            }
+        Cartridge cartridge = context -> {
+            contextReference.set(context);
+            context.lightKey("A", KeyColor.GREEN);
         };
 
         try (CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), cartridge)) {
@@ -382,5 +370,8 @@ class CartridgeRuntimeTest {
                     .toList()
             )
         );
+    }
+
+    private record PlayerMoved(String destination) {
     }
 }

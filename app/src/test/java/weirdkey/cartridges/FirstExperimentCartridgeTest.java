@@ -18,24 +18,28 @@ class FirstExperimentCartridgeTest {
     @Test
     void advancesOnlyWhenTheLitKeyIsPressed() {
         InMemoryKeyboard keyboard = new InMemoryKeyboard(topology("A", "B", "C"));
-        CartridgeRuntime runtime = new CartridgeRuntime(keyboard, Optional.empty(), new FirstExperimentCartridge());
+        try (CartridgeRuntime runtime = new CartridgeRuntime(
+                keyboard,
+                Optional.empty(),
+                new FirstExperimentCartridge()
+            )) {
+            runtime.start();
+            assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("A"));
 
-        runtime.start();
-        assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("A"));
+            keyboard.emit(new KeyInputEvent("A", InputType.HOLD));
+            keyboard.emit(new KeyInputEvent("A", InputType.RELEASE));
+            keyboard.emit(new KeyInputEvent("B", InputType.PRESS));
+            assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("A"));
+            assertFalse(keyboard.colorOf("B").isPresent());
 
-        keyboard.emit(new KeyInputEvent("A", InputType.HOLD));
-        keyboard.emit(new KeyInputEvent("A", InputType.RELEASE));
-        keyboard.emit(new KeyInputEvent("B", InputType.PRESS));
-        assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("A"));
-        assertFalse(keyboard.colorOf("B").isPresent());
+            keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
+            assertTrue(keyboard.colorOf("A").isEmpty());
+            assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("B"));
 
-        keyboard.emit(new KeyInputEvent("A", InputType.PRESS));
-        assertTrue(keyboard.colorOf("A").isEmpty());
-        assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("B"));
-
-        keyboard.emit(new KeyInputEvent("B", InputType.PRESS));
-        keyboard.emit(new KeyInputEvent("C", InputType.PRESS));
-        assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("A"));
+            keyboard.emit(new KeyInputEvent("B", InputType.PRESS));
+            keyboard.emit(new KeyInputEvent("C", InputType.PRESS));
+            assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("A"));
+        }
     }
 
     private static KeyboardTopology topology(String... keyIds) {

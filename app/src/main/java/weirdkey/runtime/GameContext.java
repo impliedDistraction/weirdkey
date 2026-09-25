@@ -8,7 +8,7 @@ import java.util.Set;
 
 import weirdkey.runtime.events.EventBus;
 
-public final class GameContext {
+final class GameContext {
     private final KeyboardDevice keyboard;
     private final Optional<DisplaySurface> displaySurface;
     private final EventBus events;
