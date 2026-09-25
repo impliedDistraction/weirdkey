@@ -75,13 +75,19 @@ public final class CartridgeVault {
             throw new IllegalStateException("Expected frontmatter in " + manifestPath);
         }
 
-        int frontmatterEnd = lines.subList(1, lines.size()).indexOf("---");
+        int frontmatterEnd = -1;
+        for (int index = 1; index < lines.size(); index++) {
+            if ("---".equals(lines.get(index).trim())) {
+                frontmatterEnd = index;
+                break;
+            }
+        }
         if (frontmatterEnd < 0) {
             throw new IllegalStateException("Unterminated frontmatter in " + manifestPath);
         }
 
-        Map<String, String> metadata = parseFrontmatter(lines.subList(1, frontmatterEnd + 1), manifestPath);
-        String description = String.join(System.lineSeparator(), lines.subList(frontmatterEnd + 2, lines.size())).trim();
+        Map<String, String> metadata = parseFrontmatter(lines.subList(1, frontmatterEnd), manifestPath);
+        String description = String.join(System.lineSeparator(), lines.subList(frontmatterEnd + 1, lines.size())).trim();
         String id = required(metadata, "id", manifestPath);
         String name = required(metadata, "name", manifestPath);
         CartridgeAvailability availability = CartridgeAvailability.valueOf(
