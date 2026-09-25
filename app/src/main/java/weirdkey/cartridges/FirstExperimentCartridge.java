@@ -1,6 +1,7 @@
 package weirdkey.cartridges;
 
 import java.util.List;
+
 import weirdkey.runtime.Cartridge;
 import weirdkey.runtime.CartridgeContext;
 import weirdkey.runtime.InputType;
