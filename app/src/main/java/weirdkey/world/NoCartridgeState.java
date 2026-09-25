@@ -26,9 +26,14 @@ final class NoCartridgeState implements Cartridge {
 
     @Override
     public void install(CartridgeContext context) {
+        pauseKeyId = context.topology().orderedKeys().stream()
+            .map(KeyDefinition::id)
+            .filter("PAUSE"::equals)
+            .findFirst()
+            .orElse(null);
         List<String> assignableKeys = context.topology().orderedKeys().stream()
             .map(KeyDefinition::id)
-            .filter(keyId -> !"ESC".equals(keyId))
+            .filter(keyId -> !"ESC".equals(keyId) && !"PAUSE".equals(keyId))
             .toList();
         if (assignableKeys.size() < cartridges.size()) {
             throw new IllegalStateException("Not enough keys to expose discovered cartridges");
@@ -41,7 +46,6 @@ final class NoCartridgeState implements Cartridge {
             discoveredSelections.add(new Selection(keyId, manifest));
         }
         selections = List.copyOf(discoveredSelections);
-        pauseKeyId = assignableKeys.contains("PAUSE") ? "PAUSE" : null;
 
         List<String> capturedKeys = new ArrayList<>(selections.stream().map(Selection::keyId).toList());
         if (pauseKeyId != null && !capturedKeys.contains(pauseKeyId)) {
