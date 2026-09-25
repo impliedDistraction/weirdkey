@@ -51,7 +51,7 @@ class ProgressionCartridgeTest {
 
             keyboard.emit(new KeyInputEvent("SPACE", InputType.PRESS));
             assertLit(keyboard, "NUMPAD_5", new KeyColor(255, 0, 128));
-            assertLit(keyboard, "NUMPAD_4", new KeyColor(48, 0, 0));
+            assertLit(keyboard, "NUMPAD_2", new KeyColor(48, 0, 0));
             assertLit(keyboard, "NUMPAD_0", new KeyColor(0, 32, 96));
 
             keyboard.emit(new KeyInputEvent("SPACE", InputType.HOLD));
@@ -62,7 +62,7 @@ class ProgressionCartridgeTest {
     }
 
     @Test
-    void branchingMovementCanFreeTheActorAndRecordsBehavioralEvidence() {
+    void blockedMovementAndAnIntentionalDetourCanFreeTheActor() {
         InMemoryKeyboard keyboard = keyboard();
         List<String> statuses = new ArrayList<>();
         AtomicInteger exits = new AtomicInteger();
@@ -77,7 +77,13 @@ class ProgressionCartridgeTest {
             runtime.start();
             finishTutorial(keyboard);
 
-            press(keyboard, "A", "S", "A", "S");
+            press(keyboard, "W");
+            revealActorAt(keyboard, "NUMPAD_5");
+            press(keyboard, "S", "A");
+            revealActorAt(keyboard, "NUMPAD_4");
+            press(keyboard, "S");
+            revealActorAt(keyboard, "NUMPAD_1");
+            press(keyboard, "A", "S");
             assertLit(keyboard, "ESC", KeyColor.GREEN);
             press(keyboard, "ESC");
         }
@@ -88,7 +94,8 @@ class ProgressionCartridgeTest {
         assertTrue(result.escaped());
         assertEquals(
             java.util.Set.of(
-                ProgressionCartridge.Observation.RETREATED_FROM_MOTION,
+                ProgressionCartridge.Observation.APPROACHED_UNKNOWN,
+                ProgressionCartridge.Observation.INVESTIGATED_ANOMALY,
                 ProgressionCartridge.Observation.PROTECTED_OTHER_LIGHT
             ),
             result.observations()
@@ -122,6 +129,12 @@ class ProgressionCartridgeTest {
         for (String keyId : keyIds) {
             keyboard.emit(new KeyInputEvent(keyId, InputType.PRESS));
         }
+    }
+
+    private static void revealActorAt(InMemoryKeyboard keyboard, String keyId) {
+        keyboard.emit(new KeyInputEvent("SPACE", InputType.PRESS));
+        assertLit(keyboard, keyId, new KeyColor(255, 0, 128));
+        keyboard.emit(new KeyInputEvent("SPACE", InputType.RELEASE));
     }
 
     private static void assertLit(InMemoryKeyboard keyboard, String keyId, KeyColor color) {

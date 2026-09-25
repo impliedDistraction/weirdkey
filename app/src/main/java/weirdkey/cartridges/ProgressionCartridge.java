@@ -23,25 +23,15 @@ public final class ProgressionCartridge implements Cartridge {
     private static final String LAYER_KEY = "SPACE";
     private static final String RETURN_KEY = "PAUSE";
     private static final List<String> TUTORIAL = List.of("F1", "F2", "F3", "F2", "F1");
-    private static final Set<String> BLOCKERS = Set.of(
-        "NUMPAD_1",
-        "NUMPAD_3",
-        "NUMPAD_4",
-        "NUMPAD_6",
-        "NUMPAD_8"
-    );
+    private static final Set<String> BLOCKERS = Set.of("NUMPAD_2", "NUMPAD_6", "NUMPAD_8");
     private static final Map<String, List<String>> PLAYER_PATHS = playerPaths();
-    private static final Map<String, String> ACTOR_MOVES = Map.of(
-        "W", "NUMPAD_8",
-        "A", "NUMPAD_4",
-        "S", "NUMPAD_2",
-        "D", "NUMPAD_6"
-    );
-    private static final Map<String, String> LOWER_ACTOR_MOVES = Map.of(
-        "W", "NUMPAD_5",
-        "A", "NUMPAD_1",
-        "S", "NUMPAD_0",
-        "D", "NUMPAD_3"
+    private static final Map<String, Position> NUMPAD_POSITIONS = numpadPositions();
+    private static final Map<Position, String> NUMPAD_KEYS = numpadKeys();
+    private static final Map<String, Position> MOVEMENT_DELTAS = Map.of(
+        "W", new Position(-1, 0),
+        "A", new Position(0, -1),
+        "S", new Position(1, 0),
+        "D", new Position(0, 1)
     );
     private static final Set<String> REQUIRED_KEYS = requiredKeys();
 
@@ -135,18 +125,16 @@ public final class ProgressionCartridge implements Cartridge {
     }
 
     private void moveActor(String movementKey) {
-        String attemptedDestination = switch (actorKey) {
-            case "NUMPAD_5" -> ACTOR_MOVES.get(movementKey);
-            case "NUMPAD_2" -> LOWER_ACTOR_MOVES.get(movementKey);
-            default -> actorKey;
-        };
+        Position delta = MOVEMENT_DELTAS.get(movementKey);
+        Position current = NUMPAD_POSITIONS.get(actorKey);
+        String attemptedDestination = delta == null
+            ? null
+            : NUMPAD_KEYS.get(new Position(current.row() + delta.row(), current.column() + delta.column()));
         if (attemptedDestination == null || BLOCKERS.contains(attemptedDestination)) {
             return;
         }
-        if (!attemptedDestination.equals(actorKey)) {
-            actorKey = attemptedDestination;
-            observations.add(Observation.PROTECTED_OTHER_LIGHT);
-        }
+        actorKey = attemptedDestination;
+        observations.add(Observation.PROTECTED_OTHER_LIGHT);
     }
 
     private void failedAction() {
@@ -198,13 +186,37 @@ public final class ProgressionCartridge implements Cartridge {
         return Map.copyOf(paths);
     }
 
+    private static Map<String, Position> numpadPositions() {
+        Map<String, Position> positions = new LinkedHashMap<>();
+        positions.put("NUMPAD_7", new Position(0, 0));
+        positions.put("NUMPAD_8", new Position(0, 1));
+        positions.put("NUMPAD_9", new Position(0, 2));
+        positions.put("NUMPAD_4", new Position(1, 0));
+        positions.put("NUMPAD_5", new Position(1, 1));
+        positions.put("NUMPAD_6", new Position(1, 2));
+        positions.put("NUMPAD_1", new Position(2, 0));
+        positions.put("NUMPAD_2", new Position(2, 1));
+        positions.put("NUMPAD_3", new Position(2, 2));
+        positions.put("NUMPAD_0", new Position(3, 0));
+        return Map.copyOf(positions);
+    }
+
+    private static Map<Position, String> numpadKeys() {
+        Map<Position, String> keys = new LinkedHashMap<>();
+        NUMPAD_POSITIONS.forEach((keyId, position) -> keys.put(position, keyId));
+        return Map.copyOf(keys);
+    }
+
     private static Set<String> requiredKeys() {
         List<String> keys = new ArrayList<>(TUTORIAL);
         keys.addAll(PLAYER_PATHS.keySet());
         PLAYER_PATHS.values().forEach(keys::addAll);
-        keys.addAll(BLOCKERS);
-        keys.addAll(List.of("NUMPAD_0", "NUMPAD_2", "NUMPAD_5", "ESC", LAYER_KEY, RETURN_KEY));
+        keys.addAll(NUMPAD_POSITIONS.keySet());
+        keys.addAll(List.of("ESC", LAYER_KEY, RETURN_KEY));
         return Set.copyOf(keys);
+    }
+
+    private record Position(int row, int column) {
     }
 
     public enum Observation {

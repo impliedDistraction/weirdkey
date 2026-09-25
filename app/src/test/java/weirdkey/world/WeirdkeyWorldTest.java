@@ -127,7 +127,7 @@ class WeirdkeyWorldTest {
             )) {
             world.start();
 
-            press(keyboard, "F1", "F1", "F2", "F3", "F2", "F1", "A", "S", "A", "S", "ESC");
+            press(keyboard, "F1", "F1", "F2", "F3", "F2", "F1", "W", "S", "A", "S", "A", "S", "ESC");
 
             ProgressionCartridge.Result result =
                 (ProgressionCartridge.Result) world.lastCartridgeResult().orElseThrow();
