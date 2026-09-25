@@ -29,7 +29,7 @@ Install Logitech G HUB, connect the keyboard, and run:
 ./gradlew :app:run --args="--hardware"
 ```
 
-Weirdkey saves the current lighting, turns the keyboard dark, and lights one key green. Captured gameplay keys stay inside Weirdkey instead of reaching the foreground Windows app, while Esc remains available to quit and restore the saved lighting. Set `WEIRDKEY_LOGITECH_LED_DLL` only if G HUB's LED SDK DLL is installed outside its standard location.
+Weirdkey saves the current lighting, turns the keyboard dark, and lights one key green. Captured gameplay keys stay inside Weirdkey instead of reaching the foreground Windows app, while Esc remains available to quit and restore the saved lighting. Turn off Windows **Settings > Personalization > Dynamic Lighting > Use Dynamic Lighting on my devices** so it does not override G HUB's per-key SDK output. Set `WEIRDKEY_LOGITECH_LED_DLL` only if G HUB's LED SDK DLL is installed outside its standard location.
 
 ## Record a playtest
 
@@ -41,6 +41,8 @@ Add `--playtest` to either launch mode:
 ```
 
 Each run creates an ignored directory under `playtests/sessions/` containing metadata, a timestamped JSONL event trace, a generated summary, and a notes template. Only keys currently captured by Weirdkey are recorded. See `playtests/README.md` for the playtest protocol and artifact details.
+
+Generated Gradle output is stored outside the OneDrive-backed workspace under `~/.weirdkey/` to avoid Windows file-lock failures. Set `WEIRDKEY_BUILD_ROOT` to use another local build directory.
 
 ## Runtime events
 

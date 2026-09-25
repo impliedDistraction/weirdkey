@@ -2,6 +2,14 @@ plugins {
     id 'application'
 }
 
+def defaultBuildRoot = new File(
+    System.getProperty('user.home'),
+    ".weirdkey/build-${Integer.toUnsignedString(rootProject.projectDir.absolutePath.hashCode())}"
+)
+layout.buildDirectory = providers.environmentVariable('WEIRDKEY_BUILD_ROOT')
+    .map { new File(it, 'app') }
+    .orElse(defaultBuildRoot.toString())
+
 repositories {
     mavenCentral()
 }

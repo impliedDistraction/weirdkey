@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import com.sun.jna.Library;
@@ -54,12 +55,22 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
         }
 
         try {
+            awaitLedSdkReady();
             requireSdkCall(ledSdk.LogiLedSetTargetDevice(LOGI_DEVICETYPE_PERKEY_RGB), "target the keyboard");
             requireSdkCall(ledSdk.LogiLedSaveCurrentLighting(), "save the current lighting");
             requireSdkCall(ledSdk.LogiLedSetLighting(0, 0, 0), "turn off the keyboard lighting");
         } catch (RuntimeException exception) {
             ledSdk.LogiLedShutdown();
             throw exception;
+        }
+    }
+
+    private static void awaitLedSdkReady() {
+        try {
+            TimeUnit.MILLISECONDS.sleep(100);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for Logitech LED SDK initialization", exception);
         }
     }
 
