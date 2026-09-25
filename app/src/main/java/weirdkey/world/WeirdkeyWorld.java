@@ -4,6 +4,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
+import weirdkey.runtime.Cartridge;
+import weirdkey.runtime.CartridgeResult;
 import weirdkey.runtime.CartridgeRuntime;
 import weirdkey.runtime.DisplaySurface;
 import weirdkey.runtime.InstallationRuntime;
@@ -18,7 +20,9 @@ public final class WeirdkeyWorld implements AutoCloseable {
     private final List<InstallationState> installationStates;
     private InstallationRuntime installationRuntime;
     private NoCartridgeState noCartridgeState;
+    private Cartridge activeCartridge;
     private CartridgeRuntime activeRuntime;
+    private Optional<CartridgeResult> lastCartridgeResult = Optional.empty();
     private CartridgeManifest pendingLaunch;
     private boolean started;
     private boolean closed;
@@ -95,10 +99,11 @@ public final class WeirdkeyWorld implements AutoCloseable {
     }
 
     private void launch(CartridgeManifest manifest) {
+        activeCartridge = cartridgeVault.instantiate(manifest);
         activeRuntime = new CartridgeRuntime(
             keyboard,
             displaySurface,
-            cartridgeVault.instantiate(manifest),
+            activeCartridge,
             this::onCartridgeStopped
         );
         activeRuntime.start();
@@ -110,8 +115,14 @@ public final class WeirdkeyWorld implements AutoCloseable {
         }
 
         activeRuntime = null;
+        lastCartridgeResult = activeCartridge.result();
+        activeCartridge = null;
         prepareDeviceForNextState();
         installationRuntime.run(noCartridgeState::activate);
+    }
+
+    public Optional<CartridgeResult> lastCartridgeResult() {
+        return lastCartridgeResult;
     }
 
     private void prepareDeviceForNextState() {

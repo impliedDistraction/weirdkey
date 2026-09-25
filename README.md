@@ -8,7 +8,7 @@ Put the game in the controller. weirdkey is a tiny Java runtime for cartridge-st
 - `KeyboardDevice` exposes per-key RGB output plus press / hold / release input events.
 - `CartridgeRuntime` installs a cartridge's event and lifecycle composition against a keyboard, with an optional display surface.
 - `WeirdkeyWorld` starts in a cartless installation state, discovers cartridge manifests, and launches playable cartridges through the same runtime machinery.
-- `FirstExperimentCartridge` currently backs the launchable `Progression` fixture.
+- `ProgressionCartridge` begins with follow-the-light, then opens into a branching keyboard-space experiment.
 
 ## Run Weirdkey
 
@@ -18,6 +18,8 @@ Put the game in the controller. weirdkey is a tiny Java runtime for cartridge-st
 ```
 
 Bare arguments are treated as key presses; use `PRESS:KEY`, `HOLD:KEY`, or `RELEASE:KEY` to simulate other input events. The cartless state currently exposes `Progression` as a launchable cartridge and `Paint With Kevin` as an inspectable unavailable cartridge.
+
+Progression starts on `F1`, reverses after `F3`, and then uses bright keys for the moving light and faint keys for reachable neighbors. Hold `SPACE` to reveal the overlapping numpad layer; movement through `W`/`A`/`S`/`D` also moves its other light. `PAUSE` returns early, while reaching and pressing `ESC` completes the cartridge and returns to Weirdkey.
 
 ## Run on a G915 X on Windows
 

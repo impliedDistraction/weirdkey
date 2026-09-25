@@ -19,6 +19,8 @@ import weirdkey.runtime.KeyDefinition;
 import weirdkey.runtime.KeyInputEvent;
 import weirdkey.runtime.KeyboardTopology;
 import weirdkey.runtime.InputType;
+import weirdkey.runtime.LogitechG915XTopology;
+import weirdkey.cartridges.ProgressionCartridge;
 
 class WeirdkeyWorldTest {
     @Test
@@ -35,7 +37,7 @@ class WeirdkeyWorldTest {
             List.of(CartridgeAvailability.AVAILABLE, CartridgeAvailability.UNAVAILABLE),
             manifests.stream().map(CartridgeManifest::availability).toList()
         );
-        assertEquals(Optional.of("weirdkey.cartridges.FirstExperimentCartridge"), manifests.get(0).entry());
+        assertEquals(Optional.of("weirdkey.cartridges.ProgressionCartridge"), manifests.get(0).entry());
         assertEquals("KEVIN IS NOT AVAILABLE.", manifests.get(1).description());
     }
 
@@ -65,7 +67,7 @@ class WeirdkeyWorldTest {
 
     @Test
     void launchingProgressionCanReturnToTheCartlessWorld() {
-        InMemoryKeyboard keyboard = keyboard("F1", "F2", "PAUSE");
+        InMemoryKeyboard keyboard = new InMemoryKeyboard(LogitechG915XTopology.create());
         List<String> statuses = new ArrayList<>();
 
         try (WeirdkeyWorld world = new WeirdkeyWorld(
@@ -93,7 +95,7 @@ class WeirdkeyWorldTest {
 
     @Test
     void installationStateSubscriptionsSurviveLaunchAndReturn() {
-        InMemoryKeyboard keyboard = keyboard("F1", "F2", "PAUSE");
+        InMemoryKeyboard keyboard = new InMemoryKeyboard(LogitechG915XTopology.create());
         PersistentProbe probe = new PersistentProbe();
 
         try (WeirdkeyWorld world = new WeirdkeyWorld(
@@ -114,6 +116,26 @@ class WeirdkeyWorldTest {
         assertEquals(4, probe.inputs.get());
     }
 
+    @Test
+    void completedProgressionReturnsItsResultToTheWorld() {
+        InMemoryKeyboard keyboard = new InMemoryKeyboard(LogitechG915XTopology.create());
+
+        try (WeirdkeyWorld world = new WeirdkeyWorld(
+                keyboard,
+                Optional.empty(),
+                repositoryRoot().resolve("cartridges")
+            )) {
+            world.start();
+
+            press(keyboard, "F1", "F1", "F2", "F3", "F2", "F1", "A", "S", "A", "S", "ESC");
+
+            ProgressionCartridge.Result result =
+                (ProgressionCartridge.Result) world.lastCartridgeResult().orElseThrow();
+            assertTrue(result.escaped());
+            assertEquals(Optional.of(KeyColor.GREEN), keyboard.colorOf("F1"));
+        }
+    }
+
     private static String last(List<String> values) {
         return values.get(values.size() - 1);
     }
@@ -126,6 +148,12 @@ class WeirdkeyWorldTest {
                     .toList()
             )
         );
+    }
+
+    private static void press(InMemoryKeyboard keyboard, String... keyIds) {
+        for (String keyId : keyIds) {
+            keyboard.emit(new KeyInputEvent(keyId, InputType.PRESS));
+        }
     }
 
     private static Path repositoryRoot() {
