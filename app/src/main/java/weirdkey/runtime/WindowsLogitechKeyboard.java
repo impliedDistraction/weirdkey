@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import com.sun.jna.Library;
@@ -54,12 +55,22 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
         }
 
         try {
+            awaitLedSdkReady();
             requireSdkCall(ledSdk.LogiLedSetTargetDevice(LOGI_DEVICETYPE_PERKEY_RGB), "target the keyboard");
             requireSdkCall(ledSdk.LogiLedSaveCurrentLighting(), "save the current lighting");
             requireSdkCall(ledSdk.LogiLedSetLighting(0, 0, 0), "turn off the keyboard lighting");
         } catch (RuntimeException exception) {
             ledSdk.LogiLedShutdown();
             throw exception;
+        }
+    }
+
+    private static void awaitLedSdkReady() {
+        try {
+            TimeUnit.MILLISECONDS.sleep(100);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for Logitech LED SDK initialization", exception);
         }
     }
 
@@ -170,7 +181,7 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
             if (keyDown || keyUp) {
                 String keyId = keyId(event);
                 boolean suppress = shouldSuppress(messageId, keyId, capturedKeys, suppressedKeys);
-                if ("ESC".equals(keyId) && keyDown) {
+                if ("ESC".equals(keyId) && keyDown && !suppress) {
                     User32.INSTANCE.PostQuitMessage(0);
                 } else if (keyId != null) {
                     try {
@@ -219,7 +230,7 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
         Set<String> capturedKeys,
         Set<String> suppressedKeys
     ) {
-        if (keyId == null || "ESC".equals(keyId)) {
+        if (keyId == null) {
             return false;
         }
         if (messageId == WinUser.WM_KEYDOWN || messageId == WinUser.WM_SYSKEYDOWN) {
@@ -244,7 +255,6 @@ public final class WindowsLogitechKeyboard implements KeyboardDevice, AutoClosea
 
     private static KeyboardTopology supportedTopology() {
         List<KeyDefinition> keys = LogitechG915XTopology.create().orderedKeys().stream()
-            .filter(key -> !"ESC".equals(key.id()))
             .filter(key -> SCAN_CODES.containsKey(key.id()))
             .toList();
         return new KeyboardTopology(keys);

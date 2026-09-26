@@ -32,3 +32,6 @@ build
 
 # Ignore Kotlin plugin data
 .kotlin
+
+# Local playtest recordings
+**/playtests/sessions/

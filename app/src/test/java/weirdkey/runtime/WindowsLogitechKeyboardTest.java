@@ -47,6 +47,24 @@ class WindowsLogitechKeyboardTest {
     }
 
     @Test
+    void escapeCanBeCapturedByACartridge() {
+        Set<String> suppressedKeys = new HashSet<>();
+
+        assertTrue(WindowsLogitechKeyboard.shouldSuppress(
+            WinUser.WM_KEYDOWN,
+            "ESC",
+            Set.of("ESC"),
+            suppressedKeys
+        ));
+        assertTrue(WindowsLogitechKeyboard.shouldSuppress(
+            WinUser.WM_KEYUP,
+            "ESC",
+            Set.of(),
+            suppressedKeys
+        ));
+    }
+
+    @Test
     void preservesSuppressionDecisionForTheWholePhysicalPress() {
         Set<String> suppressedKeys = new HashSet<>();
 
